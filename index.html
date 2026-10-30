@@ -84,8 +84,8 @@ button,input,select{font-family:inherit;font-size:inherit;color:inherit}
 .meta b{color:var(--ink);font-weight:600}
 
 /* ===== slide (fixed 1280x720) ===== */
-.s-donut{position:absolute;left:28px;top:40px;width:520px;height:420px}
-.s-legend{position:absolute;left:28px;top:438px;width:520px;display:flex;justify-content:center;gap:18px;font-size:15px;font-weight:600;color:var(--navy)}
+.s-donut{position:absolute;left:28px;top:40px;width:500px;height:420px;overflow:visible}
+.s-legend{position:absolute;left:28px;top:438px;width:500px;display:flex;justify-content:center;gap:18px;font-size:15px;font-weight:600;color:var(--navy)}
 .s-legend span{display:inline-flex;align-items:center;gap:6px}
 .s-legend i{width:11px;height:11px;display:inline-block}
 .s-table{position:absolute;left:558px;top:30px;width:670px}
@@ -366,6 +366,7 @@ const state = {
   weights: Object.fromEntries(PLANS.map(p => [p.id, {...p.w}])),
   meta: {diy:{name:'My Portfolio', risk:'Custom'}},
   start:null, end:null,
+  amount:'',
 };
 
 /* ================= storage ================= */
@@ -453,6 +454,9 @@ function render(err=''){
       <div class="tabs" role="group" aria-label="เลือกแผน">
         ${PLANS.map(p => `<button class="tab" aria-pressed="${p.id===state.plan}" data-plan="${p.id}">${p.no ? 'แผน '+p.no : 'DIY'}</button>`).join('')}
       </div>
+      <label class="range">เงินลงทุน
+        <input type="number" id="amt" min="0" step="0.1" inputmode="decimal" placeholder="เช่น 10" value="${esc(state.amount)}" style="width:110px;text-align:right">
+        ล้านบาท</label>
       <div class="range">
         <span>ช่วงข้อมูล</span>
         <input type="date" id="dStart" value="${state.start}" min="${DATA.csv.dates[0]}" max="${lastDate()}">
@@ -470,6 +474,7 @@ function render(err=''){
       <div class="panel" id="panel"></div>
     </div>`;
   app.querySelectorAll('[data-plan]').forEach(b => b.onclick = () => { state.plan = b.dataset.plan; render(); });
+  app.querySelector('#amt').oninput = e => { state.amount = e.target.value; update(); };
   const ds = app.querySelector('#dStart'), de = app.querySelector('#dEnd');
   ds.onchange = () => { if (ds.value){ state.start = ds.value; update(); } };
   de.onchange = () => { if (de.value){ state.end = de.value; update(); } };
@@ -484,11 +489,13 @@ function update(){
   const plan = PLANS.find(p => p.id === state.plan);
   document.getElementById('slide').innerHTML = slideHTML(plan, r);
   document.getElementById('note').innerHTML = noteHTML(r);
+  stretchTable();
   const sumEl = document.getElementById('sum');
   if (sumEl){ sumEl.className = 'sum ' + (Math.abs(r.sum-100) < 1e-6 ? 'good' : 'bad'); sumEl.lastElementChild.textContent = fmtNum(r.sum) + '%'; }
   const thrEl = document.getElementById('thr');
   if (thrEl) thrEl.textContent = r.thr != null ? (r.thr*100).toFixed(3).replace(/0+$/,'').replace(/\.$/,'') + '%' : '—';
 }
+const fmtMoney = x => x.toLocaleString('en-US', {maximumFractionDigits: 2});
 const fmtNum = x => (Math.round(x*100)/100).toString();
 
 function colorsFor(models, raw){
@@ -524,7 +531,7 @@ function slideHTML(plan, r){
   }).join('');
   const rec1 = recLong(p.recMedian), rec2 = recLong(p.recLongest);
   return `
-    <svg class="s-donut" viewBox="0 0 520 420" aria-label="สัดส่วนพอร์ต">${donut(models, r.raw, col)}</svg>
+    <svg class="s-donut" viewBox="0 0 500 420" aria-label="สัดส่วนพอร์ต">${donut(models, r.raw, col)}</svg>
     <div class="s-legend">${models.map(m => `<span><i style="background:${col[m]}"></i>${m}</span>`).join('')}</div>
     <div class="s-table">
       ${titleBlock}
@@ -557,7 +564,8 @@ function slideHTML(plan, r){
 }
 
 function donut(models, raw, col){
-  const cx = 260, cy = 205, R = 152, r = 117, total = models.reduce((a,m) => a + (+raw[m]||0), 0);
+  const amt = parseFloat(state.amount) || 0;
+  const cx = 250, cy = 210, R = 146, r = 112, total = models.reduce((a,m) => a + (+raw[m]||0), 0);
   let a0 = -Math.PI/2, out = '';
   const pt = (rad, a) => [cx + rad*Math.cos(a), cy + rad*Math.sin(a)];
   const labels = [];
@@ -572,20 +580,45 @@ function donut(models, raw, col){
     }
     labels.push({m, v, am:(a0+a1)/2}); a0 = a1;
   });
-  // labels with leader lines
+  // labels with leader lines; spread labels on each side so they never overlap
+  const gap = amt > 0 ? 58 : 44, top = 30, bottom = amt > 0 ? 362 : 380;
+  labels.forEach(L => { L.right = Math.cos(L.am) >= 0; L.ly = cy + (R + 22) * Math.sin(L.am); });
+  [true, false].forEach(side => {
+    const g = labels.filter(L => L.right === side).sort((a, b) => a.ly - b.ly);
+    for (let i = 0; i < g.length; i++) g[i].ly = Math.max(g[i].ly, i ? g[i-1].ly + gap : top);
+    const over = g.length ? g[g.length-1].ly - bottom : 0;
+    if (over > 0) g.forEach(L => L.ly -= over);
+    for (let i = g.length - 2; i >= 0; i--) g[i].ly = Math.min(g[i].ly, g[i+1].ly - gap);
+  });
   labels.forEach(L => {
-    const right = Math.cos(L.am) >= 0;
+    const right = L.right, ly = L.ly;
     const [sx,sy] = pt((R+r)/2, L.am);
-    let ly = cy + (R+22)*Math.sin(L.am); ly = Math.max(40, Math.min(390, ly));
-    const lx = right ? cx + R + 40 : cx - R - 40;
+    const lx = right ? cx + R + 28 : cx - R - 28;
     out += `<polyline points="${sx},${sy} ${lx + (right?-6:6)},${ly}" fill="none" stroke="#9aa3b2" stroke-width="1"/>`;
-    const tx = right ? lx : lx, anchor = right ? 'start' : 'end';
+    const tx = lx, anchor = right ? 'start' : 'end';
     out += `<text x="${tx}" y="${ly-10}" text-anchor="${anchor}" font-size="14" font-weight="600" fill="#16233a">${L.m}</text>`;
     out += `<text x="${tx}" y="${ly+14}" text-anchor="${anchor}" font-size="22" font-weight="600" fill="#16233a">${fmtNum(L.v)}%</text>`;
+    if (amt > 0) out += `<text x="${tx}" y="${ly+33}" text-anchor="${anchor}" font-size="14" font-weight="500" fill="#5b6474">${fmtMoney(amt*L.v/total)} ล้านบาท</text>`;
   });
   out += `<text x="${cx}" y="${cy-48}" text-anchor="middle" font-size="19" font-weight="500" fill="#16233a">Portfolio Value</text>`;
-  out += `<text x="${cx}" y="${cy+66}" text-anchor="middle" font-size="24" font-weight="600" fill="#16233a">ล้านบาท</text>`;
+  if (amt > 0){
+    out += `<text x="${cx}" y="${cy+18}" text-anchor="middle" font-size="${fmtMoney(amt).length > 7 ? 40 : 52}" font-weight="700" fill="#16233a">${fmtMoney(amt)}</text>`;
+    out += `<text x="${cx}" y="${cy+62}" text-anchor="middle" font-size="24" font-weight="600" fill="#16233a">ล้านบาท</text>`;
+  } else out += `<text x="${cx}" y="${cy+66}" text-anchor="middle" font-size="24" font-weight="600" fill="#16233a">ล้านบาท</text>`;
   return out;
+}
+
+
+/* make the model table reach down to just above the bottom boxes */
+const TABLE_BOTTOM = 470;
+function stretchTable(){
+  const st = document.querySelector('#slide .s-table'); if (!st) return;
+  const tbl = st.querySelector('.tbl'), rows = [...tbl.tBodies[0].rows];
+  rows.forEach(tr => tr.style.height = '');
+  const used = st.offsetTop + tbl.offsetTop + tbl.tHead.offsetHeight;
+  const natural = rows.reduce((a, tr) => a + tr.offsetHeight, 0);
+  const avail = TABLE_BOTTOM - used;
+  if (avail > natural) rows.forEach(tr => tr.style.height = (avail / rows.length) + 'px');
 }
 
 function noteHTML(r){
