@@ -66,6 +66,14 @@ button,input,select{font-family:inherit;font-size:inherit;color:inherit}
 .wrow input{width:100%;border:1px solid var(--line);border-radius:6px;padding:5px 6px;text-align:right;font-variant-numeric:tabular-nums}
 .x{border:0;background:none;color:var(--muted);cursor:pointer;font-size:16px;line-height:1;padding:2px}
 .x:hover{color:var(--neg)}
+.grp{font-family:var(--head);font-weight:700;color:var(--navy);font-size:13.5px;margin:12px 0 2px;padding-bottom:4px;border-bottom:2px solid var(--navy)}
+.drow{display:grid;grid-template-columns:1fr 80px 16px;gap:8px;align-items:center;padding:5px 0;border-bottom:1px solid #eef0f4}
+.drow .nm{font-weight:600}
+.drow input{width:100%;border:1px solid var(--line);border-radius:6px;padding:5px 6px;text-align:right;font-variant-numeric:tabular-nums}
+.frow{display:grid;grid-template-columns:14px 1fr auto;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid #eef0f4}
+.frow .sw{width:12px;height:12px;border-radius:3px}
+.frow .nm{font-weight:600}
+.frow .pc{font-weight:600;font-variant-numeric:tabular-nums}
 .sum{display:flex;justify-content:space-between;margin-top:10px;font-weight:600}
 .sum.bad{color:var(--neg)} .sum.good{color:var(--pos)}
 .addrow{display:flex;gap:6px;margin-top:10px}
@@ -411,7 +419,7 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':
 /* ================= calc ================= */
 function compute(){
   const raw = state.weights[state.plan];
-  const models = MODEL_ORDER.filter(m => raw[m] != null);
+  const models = MODEL_ORDER.filter(m => +raw[m] > 0);
   const sum = models.reduce((a,m) => a + (+raw[m] || 0), 0);
   const res = {models, sum, raw};
   if (Math.abs(sum - 100) > 1e-6 || !models.length) return res;
@@ -495,13 +503,13 @@ function colorsFor(models, raw){
 function slideHTML(plan, r){
   const meta = plan.id === 'diy' ? state.meta.diy : plan;
   const models = r.models;
-  if (!models.length) return `<div class="s-msg">เพิ่มโมเดลอย่างน้อย 1 ตัวในแผงด้านขวา</div>`;
+  if (!models.length) return `<div class="s-msg">ใส่ % ของโมเดลในแผงด้านขวา</div>`;
   const col = colorsFor(models, r.raw);
   const titleBlock = `<div class="s-title"><div class="n">${esc(meta.name)}</div><div class="r">- Risk Profile: ${esc(meta.risk)} -</div></div>`;
   if (Math.abs(r.sum-100) > 1e-6) return `<div class="s-msg">สัดส่วนรวม ${fmtNum(r.sum)}% — ต้องเท่ากับ 100% ถึงจะคำนวณได้</div>`;
   if (r.missing) return `<div class="s-msg">ไม่มีข้อมูลของ ${r.missing.join(', ')} ในไฟล์ CSV</div>`;
   if (r.short) return `<div class="s-msg">ช่วงข้อมูลสั้นเกินไป ลองขยายช่วงวันที่</div>`;
-  const yrs = Math.round(r.years), p = r.port;
+  const yrs = Math.max(1, Math.floor(r.years + 0.02)), p = r.port;
   // strategy groups (rowspan for consecutive same strategy)
   const rows = r.rows.map((row,i) => {
     const s = MODEL_INFO[row.m].strategy, prev = i ? MODEL_INFO[r.rows[i-1].m].strategy : null;
@@ -594,42 +602,55 @@ function noteHTML(r){
   return parts.join('<br>');
 }
 
+const GROUPS = [
+  {label:'ตราสารหนี้', models:['FIXEDSP','FIXEDTDP','FIXEDDP']},
+  {label:'Asset Allocation', models:['CAA','MAA','AAA','DAA']},
+  {label:'หุ้นโลก', models:['TCT']},
+];
 function renderPanel(plan){
-  const raw = state.weights[plan.id];
-  const models = MODEL_ORDER.filter(m => raw[m] != null);
-  const avail = MODEL_ORDER.filter(m => raw[m] == null && DATA.csv.models[m]);
-  const col = models.length ? colorsFor(models, raw) : {};
   const isDiy = plan.id === 'diy';
+  const raw = state.weights[plan.id];
   const el = document.getElementById('panel');
-  el.innerHTML = `
-    <h3>${isDiy ? 'จัดพอร์ตเอง (DIY)' : 'แผน ' + plan.no + ' · ' + esc(plan.name)}</h3>
-    <div class="sub">ปรับ % ได้ ผลบนสไลด์อัปเดตทันที</div>
-    ${isDiy ? `
-      <label class="field">ชื่อพอร์ต<input id="mName" value="${esc(state.meta.diy.name)}"></label>
-      <label class="field">Risk Profile<input id="mRisk" value="${esc(state.meta.diy.risk)}"></label>` : ''}
-    <div id="wrows">
-      ${models.map(m => `<div class="wrow">
-        <span class="sw" style="background:${col[m]}"></span><span class="nm">${m}</span>
-        <input type="number" min="0" max="100" step="1" id="w-${m}" data-m="${m}" value="${raw[m]}" aria-label="สัดส่วน ${m}">
-        <span>%</span>
-        <button class="x" data-del="${m}" title="ลบ ${m}" aria-label="ลบ ${m}">×</button></div>`).join('')}
-    </div>
-    <div class="sum" id="sum"><span>รวม</span><span></span></div>
-    ${avail.length ? `<div class="addrow"><select id="addSel">${avail.map(m => `<option>${m}</option>`).join('')}</select><button class="btn ghost" id="addBtn">เพิ่ม</button></div>` : ''}
-    ${!isDiy ? `<div class="addrow"><button class="btn ghost" id="resetBtn" style="flex:1">คืนค่าสัดส่วนเดิมของแผน</button></div>` : ''}
-    <div class="meta">
+  const active = MODEL_ORDER.filter(m => +raw[m] > 0);
+  const filterLine = `<div class="meta">
       เกณฑ์นับ drawdown ของพอร์ต: <b id="thr">—</b><br>
       = ผลรวมของ (สัดส่วน × เกณฑ์ของแต่ละโมเดล)<br>
-      ${models.map(m => `${m} ${MODEL_INFO[m].filter}%`).join(' · ')}
+      <span id="thrParts">${active.map(m => `${m} ${MODEL_INFO[m].filter}%`).join(' · ')}</span>
     </div>`;
-  el.querySelectorAll('input[data-m]').forEach(inp => inp.oninput = () => { raw[inp.dataset.m] = inp.value === '' ? 0 : +inp.value; update(); });
-  el.querySelectorAll('[data-del]').forEach(b => b.onclick = () => { delete raw[b.dataset.del]; renderPanel(plan); update(); });
-  const add = el.querySelector('#addBtn'); if (add) add.onclick = () => { raw[el.querySelector('#addSel').value] = 0; renderPanel(plan); update(); };
-  const rs = el.querySelector('#resetBtn'); if (rs) rs.onclick = () => { state.weights[plan.id] = {...plan.w}; renderPanel(plan); update(); };
-  if (isDiy){
-    el.querySelector('#mName').oninput = e => { state.meta.diy.name = e.target.value; update(); };
-    el.querySelector('#mRisk').oninput = e => { state.meta.diy.risk = e.target.value; update(); };
+  if (!isDiy){
+    const col = colorsFor(active, raw);
+    el.innerHTML = `
+      <h3>แผน ${plan.no} · ${esc(plan.name)}</h3>
+      <div class="sub">Risk Profile: ${esc(plan.risk)}</div>
+      ${active.map(m => `<div class="frow"><span class="sw" style="background:${col[m]}"></span><span class="nm">${m}</span><span class="pc">${raw[m]}%</span></div>`).join('')}
+      <div class="sum" id="sum"><span>รวม</span><span></span></div>
+      <div class="sub" style="margin-top:10px">ต้องการลองสัดส่วนอื่น ใช้แท็บ DIY</div>
+      ${filterLine}`;
+    return;
   }
+  el.innerHTML = `
+    <h3>จัดพอร์ตเอง (DIY)</h3>
+    <div class="sub">ใส่ % ของโมเดลที่ต้องการ ช่องที่เว้นว่างหรือ 0 จะไม่นับ</div>
+    <label class="field">ชื่อพอร์ต<input id="mName" value="${esc(state.meta.diy.name)}"></label>
+    <label class="field">Risk Profile<input id="mRisk" value="${esc(state.meta.diy.risk)}"></label>
+    ${GROUPS.map(g => `<div class="grp">${g.label}</div>` + g.models.filter(m => DATA.csv.models[m]).map(m => `
+      <div class="drow">
+        <span class="nm">${m}</span>
+        <input type="number" min="0" max="100" step="1" id="w-${m}" data-m="${m}" value="${+raw[m] > 0 ? raw[m] : ''}" placeholder="0" aria-label="สัดส่วน ${m}">
+        <span>%</span></div>`).join('')).join('')}
+    <div class="sum" id="sum"><span>รวม</span><span></span></div>
+    <div class="addrow"><button class="btn ghost" id="clearBtn" style="flex:1">ล้างทั้งหมด</button></div>
+    ${filterLine}`;
+  el.querySelectorAll('input[data-m]').forEach(inp => inp.oninput = () => {
+    const v = inp.value === '' ? 0 : +inp.value;
+    if (v > 0) raw[inp.dataset.m] = v; else delete raw[inp.dataset.m];
+    const act = MODEL_ORDER.filter(m => +raw[m] > 0);
+    document.getElementById('thrParts').textContent = act.map(m => `${m} ${MODEL_INFO[m].filter}%`).join(' · ');
+    update();
+  });
+  el.querySelector('#clearBtn').onclick = () => { state.weights.diy = {}; renderPanel(plan); update(); };
+  el.querySelector('#mName').oninput = e => { state.meta.diy.name = e.target.value; update(); };
+  el.querySelector('#mRisk').oninput = e => { state.meta.diy.risk = e.target.value; update(); };
 }
 
 function renderInfo(){
