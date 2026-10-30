@@ -1,0 +1,678 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wealth Plan Portfolio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap">
+<script src="backfill.js"></script>
+<style>
+/* Layout: tool controls on top, a fixed 1280x720 "slide" scaled to fit, weights editor beside it. */
+@font-face{font-family:'BLS';src:url('fonts/BLS-Bold.ttf');font-weight:700;font-display:swap}
+@font-face{font-family:'BLS';src:url('fonts/BLS-Regular.ttf');font-weight:400;font-display:swap}
+@font-face{font-family:'BLS Text';src:url('fonts/BLS_Text-Regular.ttf');font-weight:400;font-display:swap}
+@font-face{font-family:'BLS Text';src:url('fonts/BLS_Text-Bold.ttf');font-weight:700;font-display:swap}
+:root{
+  --navy:#16233a; --navy-2:#22324f; --ink:#16233a; --muted:#6a7488; --line:#d6dbe4;
+  --bg:#eef1f5; --paper:#ffffff; --pos:#16a34a; --neg:#e3191b; --accent:#1f5fbf;
+  --c1:#3b7cc4; --c2:#a5adbf; --c3:#2b4167; --c4:#dbe7f7; --c5:#7aa5d8; --c6:#5b6474;
+  --head:'BLS','Kanit',system-ui,sans-serif; --body:'BLS Text','Kanit',system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:14px}
+button,input,select{font-family:inherit;font-size:inherit;color:inherit}
+.wrap{max-width:1500px;margin:0 auto;padding-block:20px 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.topbar{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center;justify-content:space-between;margin-bottom:14px}
+.topbar h1{font-family:var(--head);font-size:20px;margin:0;color:var(--navy);font-weight:700}
+.datainfo{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:13px;color:var(--muted)}
+.chip{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--line);border-radius:999px;padding:4px 12px}
+.chip b{color:var(--ink);font-weight:600}
+.chip .ok{color:var(--pos)} .chip .no{color:var(--neg)}
+.btn{border:1px solid var(--navy);background:var(--navy);color:#fff;border-radius:8px;padding:7px 14px;cursor:pointer;font-weight:500}
+.btn.ghost{background:#fff;color:var(--navy)}
+.btn:focus-visible,.tab:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* upload */
+.drop{background:#fff;border:2px dashed #b9c2d2;border-radius:14px;padding:36px 24px;text-align:center;max-width:760px;margin:40px auto}
+.drop.over{border-color:var(--accent);background:#f3f7fd}
+.drop h2{font-family:var(--head);margin:0 0 8px;color:var(--navy)}
+.drop ol{text-align:left;display:inline-block;margin:12px 0 18px;color:var(--muted);line-height:1.7}
+.drop .err{color:var(--neg);margin-top:12px;font-weight:500}
+
+/* controls */
+.controls{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;margin-bottom:14px}
+.tabs{display:flex;flex-wrap:wrap;gap:4px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:4px}
+.tab{border:0;background:none;padding:7px 12px;border-radius:7px;cursor:pointer;color:var(--muted);font-weight:500;white-space:nowrap}
+.tab[aria-pressed="true"]{background:var(--navy);color:#fff}
+.range{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;color:var(--muted);font-size:13px}
+.range input{border:1px solid var(--line);border-radius:7px;padding:5px 8px;background:#fff}
+.range .btn{padding:5px 10px;font-size:12.5px}
+
+.main{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px;align-items:start}
+@media (max-width:1100px){.main{grid-template-columns:minmax(0,1fr)}}
+.stage{min-width:0}
+.scaler{width:100%;overflow:hidden;border-radius:6px;box-shadow:0 2px 14px rgba(22,35,58,.12);background:#fff}
+.slide{width:1280px;height:720px;transform-origin:0 0;position:relative;background:var(--paper);font-family:var(--head);color:var(--ink)}
+.hint{font-size:12.5px;color:var(--muted);margin-top:8px;line-height:1.6}
+
+/* weights panel */
+.panel{background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px}
+.panel h3{font-family:var(--head);margin:0 0 4px;font-size:16px;color:var(--navy)}
+.panel .sub{color:var(--muted);font-size:12.5px;margin-bottom:10px}
+.wrow{display:grid;grid-template-columns:14px 1fr 70px 16px 24px;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid #eef0f4}
+.wrow .sw{width:12px;height:12px;border-radius:3px}
+.wrow .nm{font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.wrow input{width:100%;border:1px solid var(--line);border-radius:6px;padding:5px 6px;text-align:right;font-variant-numeric:tabular-nums}
+.x{border:0;background:none;color:var(--muted);cursor:pointer;font-size:16px;line-height:1;padding:2px}
+.x:hover{color:var(--neg)}
+.sum{display:flex;justify-content:space-between;margin-top:10px;font-weight:600}
+.sum.bad{color:var(--neg)} .sum.good{color:var(--pos)}
+.addrow{display:flex;gap:6px;margin-top:10px}
+.addrow select{flex:1;min-width:0;border:1px solid var(--line);border-radius:7px;padding:6px;background:#fff}
+.field{display:flex;flex-direction:column;gap:3px;margin-bottom:8px;font-size:12.5px;color:var(--muted)}
+.field input{border:1px solid var(--line);border-radius:7px;padding:6px 8px;color:var(--ink);font-size:14px}
+.meta{margin-top:14px;font-size:12.5px;color:var(--muted);line-height:1.6;border-top:1px solid #eef0f4;padding-top:10px}
+.meta b{color:var(--ink);font-weight:600}
+
+/* ===== slide (fixed 1280x720) ===== */
+.s-donut{position:absolute;left:28px;top:40px;width:520px;height:420px}
+.s-legend{position:absolute;left:28px;top:438px;width:520px;display:flex;justify-content:center;gap:18px;font-size:15px;font-weight:600;color:var(--navy)}
+.s-legend span{display:inline-flex;align-items:center;gap:6px}
+.s-legend i{width:11px;height:11px;display:inline-block}
+.s-table{position:absolute;left:558px;top:30px;width:670px}
+.s-title{background:var(--navy);color:#fff;text-align:center;padding:10px 10px 8px;margin-bottom:6px}
+.s-title .n{font-size:40px;font-weight:700;letter-spacing:-.5px;line-height:1.05}
+.s-title .r{font-size:16px;font-weight:300;color:#dfe5ef;margin-top:2px}
+.tbl{width:100%;border-collapse:collapse;font-size:17px}
+.tbl thead th{background:var(--navy);color:#fff;font-weight:600;padding:4px 6px;line-height:1.15}
+.tbl thead tr:first-child th{padding-top:10px}
+.tbl thead tr:last-child th{padding-bottom:10px;font-size:15.5px}
+.tbl td{text-align:center;padding:9px 6px;border-bottom:1.5px solid #8b93a3;font-weight:500;font-variant-numeric:tabular-nums}
+.tbl td.strat{font-size:15.5px;font-weight:500;line-height:1.35;width:120px}
+.tbl td.model{text-align:left;font-weight:600;white-space:nowrap}
+.tbl td.model i{display:inline-block;width:17px;height:17px;border-radius:50%;vertical-align:-2px;margin-right:10px}
+.tbl tbody tr:last-child td{border-bottom:4px solid var(--navy)}
+.tbl.compact td{padding:6px 6px;font-size:16px}
+.pos{color:var(--pos)} .neg{color:var(--neg)}
+.boxes{position:absolute;left:34px;right:34px;top:494px;display:grid;grid-template-columns:repeat(4,1fr);gap:20px}
+.box{border-bottom:4px solid var(--navy)}
+.box h4{margin:0;background:var(--navy);color:#fff;text-align:center;font-weight:600;font-size:18px;padding:10px 4px}
+.box h4 sup{font-size:11px}
+.brow{display:grid;grid-template-columns:44% 56%;align-items:center;height:54px;border-bottom:1.5px solid #8b93a3}
+.brow:last-child{border-bottom:0}
+.brow .k{text-align:center;font-size:15.5px;font-weight:500;line-height:1.15}
+.brow .v{text-align:center;font-size:29px;font-weight:600;font-variant-numeric:tabular-nums}
+.brow .v.big{font-size:34px}
+.brow .v.small{font-size:18px}
+.brow .v .u{font-size:17px;font-weight:500;margin-left:4px;color:var(--ink)}
+.brow .v.dark{color:var(--ink)}
+.foot{position:absolute;right:34px;bottom:12px;text-align:right;font-family:var(--body);font-size:11px;color:#333;line-height:1.7}
+.foot b{font-weight:700}
+.s-msg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:24px;color:var(--muted);text-align:center;padding:40px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <h1>Wealth Plan Portfolio</h1>
+    <div class="datainfo" id="datainfo"></div>
+  </div>
+  <input type="file" id="file" accept=".csv" hidden>
+  <div id="app"></div>
+</div>
+
+<script>
+/* ===== Wealth Plan engine (pure functions) ===== */
+const WP = (() => {
+  const DAY = 864e5;
+  const pad = n => String(n).padStart(2, '0');
+  const iso = (y, m, d) => `${y}-${pad(m)}-${pad(d)}`;
+  const toTime = s => Date.UTC(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10));
+  const daysBetween = (a, b) => Math.round((toTime(b) - toTime(a)) / DAY);
+  // Excel EDATE: same day n months later, clamped to month end
+  function edate(s, months) {
+    let y = +s.slice(0, 4), m = +s.slice(5, 7) - 1 + months, d = +s.slice(8, 10);
+    y += Math.floor(m / 12); m = ((m % 12) + 12) % 12;
+    const last = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+    return iso(y, m + 1, Math.min(d, last));
+  }
+
+  /* ---------- CSV: Model Performance export ---------- */
+  function splitCSVLine(line) {
+    const out = []; let cur = '', q = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (q) { if (ch === '"') { if (line[i + 1] === '"') { cur += '"'; i++; } else q = false; } else cur += ch; }
+      else if (ch === '"') q = true;
+      else if (ch === ',') { out.push(cur); cur = ''; }
+      else cur += ch;
+    }
+    out.push(cur); return out;
+  }
+  function parseDateAny(s) {
+    s = s.trim();
+    let m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);           // m/d/yyyy
+    if (m) return iso(+m[3], +m[1], +m[2]);
+    m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m) return iso(+m[1], +m[2], +m[3]);
+    const t = Date.parse(s + ' UTC');
+    if (!isNaN(t)) { const d = new Date(t); return iso(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate()); }
+    return null;
+  }
+  function parseModelCSV(text) {
+    text = text.replace(/^﻿/, '');
+    const lines = text.split(/\r?\n/).filter(l => l.trim());
+    const head = splitCSVLine(lines[0]).map(h => h.trim().toLowerCase());
+    const iModel = head.indexOf('model name');
+    let iDate = head.indexOf('date'); if (iDate < 0) iDate = head.indexOf('day of date');
+    const iVal = head.findIndex(h => h.includes('difference'));
+    if (iModel < 0 || iDate < 0 || iVal < 0) throw new Error('ไม่พบคอลัมน์ Model Name / date / % Difference in port_value ในไฟล์ CSV');
+    const rows = {}; const dset = new Set();
+    for (let k = 1; k < lines.length; k++) {
+      const c = splitCSVLine(lines[k]);
+      const model = (c[iModel] || '').trim(), d = parseDateAny(c[iDate] || '');
+      const v = parseFloat(String(c[iVal]).replace('%', '').replace(/,/g, ''));
+      if (!model || !d || isNaN(v)) continue;
+      (rows[model] = rows[model] || {})[d] = 1 + v / 100;
+      dset.add(d);
+    }
+    const dates = [...dset].sort();
+    const models = {};
+    Object.keys(rows).forEach(m => { models[m] = dates.map(d => rows[m][d] ?? null); });
+    return { dates, models };
+  }
+
+  /* ---------- XLSX: recovery_cycle_stats 'nav' sheet (plan1..plan5) ---------- */
+  function parseNavSheet(aoa, serialToISO) {
+    const head = aoa[0].map(h => String(h ?? '').trim().toLowerCase());
+    const cols = {};
+    head.forEach((h, i) => { if (/^plan[1-5]$/.test(h) && cols[h] == null) cols[h] = i; });
+    if (!cols.plan1 || !cols.plan5) throw new Error('ไม่พบคอลัมน์ plan1 / plan5 ใน sheet "nav"');
+    const dates = [], plans = { plan1: [], plan5: [] };
+    for (let r = 1; r < aoa.length; r++) {
+      const row = aoa[r]; if (!row || row[0] == null || row[0] === '') continue;
+      const d = typeof row[0] === 'number' ? serialToISO(row[0]) : parseDateAny(String(row[0]));
+      if (!d) continue;
+      dates.push(d);
+      ['plan1', 'plan5'].forEach(p => { const v = row[cols[p]]; plans[p].push(typeof v === 'number' ? v : null); });
+    }
+    return { dates, plans };
+  }
+
+  /* ---------- back out pre-inception TDP / TCT from plan NAVs ---------- */
+  // plan1 = 80% FIXEDSP + 20% FIXEDTDP ; plan5 = 50% AAA + 50% TCT (daily rebalanced)
+  const BACKOUT = {
+    FIXEDTDP: { plan: 'plan1', known: { FIXEDSP: 0.8 }, w: 0.2 },
+    TCT:      { plan: 'plan5', known: { AAA: 0.5 },     w: 0.5 },
+  };
+  function deriveBackfill(csv, nav) {
+    const cIdx = new Map(csv.dates.map((d, i) => [d, i]));
+    const out = {};
+    for (const [model, spec] of Object.entries(BACKOUT)) {
+      const series = csv.models[model];
+      const inc = series ? csv.dates[series.findIndex(v => v != null)] : null;
+      const pts = [];
+      nav.dates.forEach((d, i) => {
+        const pv = nav.plans[spec.plan][i], ci = cIdx.get(d);
+        if (pv == null || ci == null) return;
+        const kv = Object.keys(spec.known).map(k => csv.models[k] && csv.models[k][ci]);
+        if (kv.some(v => v == null)) return;
+        pts.push({ d, pv, kv });
+      });
+      const dates = [pts[0].d], lv = [1];
+      for (let i = 1; i < pts.length; i++) {
+        if (inc && pts[i - 1].d >= inc) break;           // only needed up to inception
+        const rp = pts[i].pv / pts[i - 1].pv - 1;
+        let rk = 0; Object.values(spec.known).forEach((w, j) => { rk += w * (pts[i].kv[j] / pts[i - 1].kv[j] - 1); });
+        dates.push(pts[i].d); lv.push(lv[lv.length - 1] * (1 + (rp - rk) / spec.w));
+      }
+      out[model] = { dates, lv, inception: inc };
+    }
+    return out;
+  }
+
+  /* ---------- full per-model level series on the CSV date grid ---------- */
+  function buildFull(csv, backfill) {
+    const models = {};
+    for (const [m, s] of Object.entries(csv.models)) {
+      const arr = s.slice();
+      const bf = backfill && backfill[m];
+      const incI = arr.findIndex(v => v != null);
+      if (bf && incI > 0) {
+        const incD = csv.dates[incI];
+        const at = d => { let lo = 0, hi = bf.dates.length - 1, k = -1;      // last bf date <= d
+          while (lo <= hi) { const mid = (lo + hi) >> 1; if (bf.dates[mid] <= d) { k = mid; lo = mid + 1; } else hi = mid - 1; }
+          return k < 0 ? null : bf.lv[k]; };
+        const bInc = at(incD);
+        for (let i = 0; i < incI; i++) {
+          if (csv.dates[i] < bf.dates[0]) continue;
+          const b = at(csv.dates[i]); if (b != null && bInc) arr[i] = b / bInc * arr[incI];
+        }
+      }
+      models[m] = arr;
+    }
+    return { dates: csv.dates, models };
+  }
+  function firstDate(full, m) { const s = full.models[m]; const i = s ? s.findIndex(v => v != null) : -1; return i < 0 ? null : full.dates[i]; }
+
+  /* ---------- portfolio: daily-rebalanced fixed weights ---------- */
+  function portfolio(full, weights, start, end) {
+    const ms = Object.keys(weights).filter(m => weights[m] > 0);
+    const dates = [], nav = [];
+    let prev = -1, lvl = 1;
+    for (let i = 0; i < full.dates.length; i++) {
+      const d = full.dates[i];
+      if (d < start || d > end) continue;
+      if (ms.some(m => full.models[m][i] == null)) continue;
+      if (prev >= 0) { let r = 0; ms.forEach(m => { r += weights[m] * (full.models[m][i] / full.models[m][prev] - 1); }); lvl *= 1 + r; }
+      dates.push(d); nav.push(lvl); prev = i;
+    }
+    return { dates, nav };
+  }
+
+  /* ---------- metrics ---------- */
+  function rolling1y(s) {   // NAV(d) / NAV(EDATE(d,-12), or nearest earlier) - 1
+    const out = []; let j = 0;
+    for (let i = 0; i < s.dates.length; i++) {
+      const t = edate(s.dates[i], -12);
+      if (t < s.dates[0]) continue;
+      while (j + 1 < s.dates.length && s.dates[j + 1] <= t) j++;
+      out.push({ d: s.dates[i], r: s.nav[i] / s.nav[j] - 1 });
+    }
+    return out;
+  }
+  // desk method: every day is a possible entry; a cycle = entry whose value is breached by
+  // >= threshold within 84 rows; drawdown = trough vs entry; recovery = days until back to entry
+  function cycles(s, thr, W = 84) {
+    const v = s.nav, d = s.dates, n = v.length, out = [];
+    for (let i = 0; i < n; i++) {
+      const jEnd = Math.min(n - 1, i + W); if (i + 1 > jEnd) continue;
+      const br = v[i] * (1 - thr); let j = -1;
+      for (let x = i + 1; x <= jEnd; x++) if (v[x] <= br) { j = x; break; }
+      if (j < 0) continue;
+      let k = -1; for (let x = j + 1; x < n; x++) if (v[x] >= v[i]) { k = x; break; }
+      const active = k < 0; if (active) k = n - 1;
+      let mn = Infinity; for (let x = i; x <= k; x++) if (v[x] < mn) mn = v[x];
+      out.push({ dd: mn / v[i] - 1, days: daysBetween(d[i], d[k]), active });
+    }
+    return out;
+  }
+  const median = a => { if (!a.length) return null; const b = [...a].sort((x, y) => x - y), h = b.length >> 1; return b.length % 2 ? b[h] : (b[h - 1] + b[h]) / 2; };
+  function maxDD(s) { let pk = -Infinity, m = 0; s.nav.forEach(x => { if (x > pk) pk = x; m = Math.min(m, x / pk - 1); }); return m; }
+  function stats(s, thr) {
+    const roll = rolling1y(s).map(x => x.r);
+    const cyc = cycles(s, thr);
+    const rec = cyc.filter(c => !c.active).map(c => c.days);
+    return {
+      start: s.dates[0], end: s.dates[s.dates.length - 1],
+      total: s.nav[s.nav.length - 1] / s.nav[0] - 1,
+      rollAvg: roll.length ? roll.reduce((a, b) => a + b, 0) / roll.length : null,
+      rollMin: roll.length ? Math.min(...roll) : null,
+      rollMax: roll.length ? Math.max(...roll) : null,
+      rollStart: roll.length ? rolling1y(s)[0].d : null,
+      maxDD: maxDD(s),
+      cycDDMedian: median(cyc.map(c => c.dd)),
+      cycDDMin: cyc.length ? Math.min(...cyc.map(c => c.dd)) : null,
+      recMedian: median(rec),
+      recLongest: cyc.length ? Math.max(...cyc.map(c => c.days)) : null,
+      nCycles: cyc.length,
+    };
+  }
+  return { parseModelCSV, parseNavSheet, deriveBackfill, buildFull, firstDate, portfolio, stats, rolling1y, cycles, edate, daysBetween };
+})();
+if (typeof module !== 'undefined') module.exports = WP;
+
+</script>
+<script>
+/* ================= config ================= */
+const MODEL_INFO = {
+  FIXEDSP:  {strategy:'Saving Max Protect', filter:0.05},
+  FIXEDTDP: {strategy:'Saving Max Protect', filter:0.5},
+  FIXEDDP:  {strategy:'Saving Max Protect', filter:0.5},
+  CAA:      {strategy:'Core Stabilizer', filter:2},
+  MAA:      {strategy:'Core Stabilizer', filter:4},
+  AAA:      {strategy:'Core Stabilizer', filter:4},
+  DAA:      {strategy:'Core Stabilizer With Yield', filter:4},
+  TCT:      {strategy:'Growth Engine', filter:4},
+};
+const MODEL_ORDER = ['FIXEDSP','FIXEDTDP','FIXEDDP','CAA','MAA','AAA','DAA','TCT'];
+const PLANS = [
+  {id:'p1', no:1, name:'The Capital Anchor', risk:'Conservative', w:{FIXEDSP:80, FIXEDTDP:20}},
+  {id:'p2', no:2, name:'Mind Your Step', risk:'Conservative to Moderate', w:{FIXEDSP:20, FIXEDTDP:60, MAA:10, TCT:10}},
+  {id:'p3', no:3, name:'Hub of Yield Growth', risk:'Moderate With Yield', w:{FIXEDTDP:40, DAA:50, TCT:10}},
+  {id:'p4', no:4, name:'Steady Wealth Builder', risk:'Moderate', w:{FIXEDSP:20, MAA:50, TCT:30}},
+  {id:'p5', no:5, name:'Alpha Multiplier', risk:'Aggressive', w:{AAA:50, TCT:50}},
+  {id:'diy', no:null, name:'My Portfolio', risk:'Custom', w:{FIXEDSP:50, MAA:50}},
+];
+const SLIDE_PERIOD = {start:'2019-04-01', end:'2026-04-24'};
+const STORE = 'wealthplan.csv.v2';
+const TH_MON = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+const PAL = ['var(--c1)','var(--c2)','var(--c3)','var(--c4)','var(--c5)','var(--c6)'];
+
+/* ================= state ================= */
+let DATA = null;      // {csv, backfill, csvName, xlsxName, savedAt}
+let FULL = null;
+const state = {
+  plan:'p1',
+  weights: Object.fromEntries(PLANS.map(p => [p.id, {...p.w}])),
+  meta: {diy:{name:'My Portfolio', risk:'Custom'}},
+  start:null, end:null,
+};
+
+/* ================= storage ================= */
+function save(){ try{ localStorage.setItem(STORE, JSON.stringify(DATA)); }catch(e){} }
+function load(){ try{ const s = localStorage.getItem(STORE); return s ? JSON.parse(s) : null; }catch(e){ return null; } }
+
+/* ================= file handling ================= */
+const fileInput = document.getElementById('file');
+fileInput.addEventListener('change', e => { handleFiles([...e.target.files]); fileInput.value=''; });
+function pickFiles(){ fileInput.click(); }
+async function handleFiles(files){
+  let err = '';
+  const f = files.find(x => /\.csv$/i.test(x.name));
+  if (!f) err = 'กรุณาเลือกไฟล์ Model Performance (.csv)';
+  else {
+    try{
+      DATA = {csv: WP.parseModelCSV(await f.text()), csvName: f.name, savedAt: new Date().toISOString()};
+      save(); prepare(); state.start = SLIDE_PERIOD.start; state.end = lastDate();
+    }catch(e){ err = e.message; }
+  }
+  render(err);
+}
+const BACKFILL = window.WP_BACKFILL || null;
+function prepare(){ FULL = DATA && DATA.csv ? WP.buildFull(DATA.csv, BACKFILL) : null; }
+const lastDate = () => DATA.csv.dates[DATA.csv.dates.length-1];
+
+/* ================= formatting ================= */
+const thDate = s => { const [y,m,d] = s.split('-'); return `${+d} ${TH_MON[+m-1]} ${y}`; };
+const thMonYear = s => `${TH_MON[+s.slice(5,7)-1]} ${s.slice(0,4)}`;
+function pct(x, opt={}){
+  if (x == null || isNaN(x)) return '—';
+  const v = x*100, a = Math.abs(v);
+  const dp = opt.dp ?? (a >= 100 ? 0 : a < 0.1 && a > 0 ? 2 : 1);
+  let s = v.toFixed(dp);
+  if (opt.trim) s = s.replace(/\.0$/, '');
+  return (v > 0 ? '+' : v < 0 ? '' : '') + s + '%';
+}
+const cls = x => x == null ? '' : x >= 0 ? 'pos' : 'neg';
+function recShort(days){
+  if (days == null) return '—';
+  const m = Math.round(days/30.4375), y = Math.floor(m/12), r = m % 12;
+  if (!y) return `${Math.max(r,1)}M`;
+  return r ? `${y}Y ${r}M` : `${y}Y`;
+}
+function recLong(days){
+  if (days == null) return {v:'—', u:''};
+  return days < 365 ? {v:(days/30.44).toFixed(1), u:'months'} : {v:(days/365.25).toFixed(1), u:'years'};
+}
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+/* ================= calc ================= */
+function compute(){
+  const raw = state.weights[state.plan];
+  const models = MODEL_ORDER.filter(m => raw[m] != null);
+  const sum = models.reduce((a,m) => a + (+raw[m] || 0), 0);
+  const res = {models, sum, raw};
+  if (Math.abs(sum - 100) > 1e-6 || !models.length) return res;
+  const w = Object.fromEntries(models.filter(m => +raw[m] > 0).map(m => [m, +raw[m]/100]));
+  const missing = Object.keys(w).filter(m => !FULL.models[m]);
+  if (missing.length){ res.missing = missing; return res; }
+  const pf = WP.portfolio(FULL, w, state.start, state.end);
+  if (pf.dates.length < 30){ res.short = true; return res; }
+  const start = pf.dates[0], end = pf.dates[pf.dates.length-1];
+  const thr = Object.entries(w).reduce((a,[m,x]) => a + MODEL_INFO[m].filter*x, 0) / 100;
+  res.thr = thr;
+  res.port = WP.stats(pf, thr);
+  res.rows = models.map(m => { const s = WP.portfolio(FULL, {[m]:1}, start, end); return {m, w:+raw[m], st: WP.stats(s, MODEL_INFO[m].filter/100)}; });
+  res.start = start; res.end = end;
+  res.years = WP.daysBetween(start, end) / 365.25;
+  // which models lean on back-filled history inside the window
+  res.backfilled = models.filter(m => { const i = DATA.csv.models[m] ? DATA.csv.models[m].findIndex(v => v != null) : -1; return i > 0 && DATA.csv.dates[i] > start; })
+                         .map(m => ({m, from: DATA.csv.dates[DATA.csv.models[m].findIndex(v => v != null)]}));
+  return res;
+}
+
+/* ================= render ================= */
+const app = document.getElementById('app');
+function render(err=''){
+  renderInfo();
+  if (!DATA || !DATA.csv){ renderUpload(err); return; }
+  const plan = PLANS.find(p => p.id === state.plan);
+  app.innerHTML = `
+    ${err ? `<div class="hint" style="color:var(--neg);margin-bottom:10px">${esc(err)}</div>` : ''}
+    <div class="controls">
+      <div class="tabs" role="group" aria-label="เลือกแผน">
+        ${PLANS.map(p => `<button class="tab" aria-pressed="${p.id===state.plan}" data-plan="${p.id}">${p.no ? 'แผน '+p.no : 'DIY'}</button>`).join('')}
+      </div>
+      <div class="range">
+        <span>ช่วงข้อมูล</span>
+        <input type="date" id="dStart" value="${state.start}" min="${DATA.csv.dates[0]}" max="${lastDate()}">
+        <span>ถึง</span>
+        <input type="date" id="dEnd" value="${state.end}" min="${DATA.csv.dates[0]}" max="${lastDate()}">
+        <button class="btn ghost" id="pSlide">ตามสไลด์ (เม.ย. 2019 – เม.ย. 2026)</button>
+        <button class="btn ghost" id="pLatest">ถึงข้อมูลล่าสุด</button>
+      </div>
+    </div>
+    <div class="main">
+      <div class="stage">
+        <div class="scaler" id="scaler"><div class="slide" id="slide"></div></div>
+        <div class="hint" id="note"></div>
+      </div>
+      <div class="panel" id="panel"></div>
+    </div>`;
+  app.querySelectorAll('[data-plan]').forEach(b => b.onclick = () => { state.plan = b.dataset.plan; render(); });
+  const ds = app.querySelector('#dStart'), de = app.querySelector('#dEnd');
+  ds.onchange = () => { if (ds.value){ state.start = ds.value; update(); } };
+  de.onchange = () => { if (de.value){ state.end = de.value; update(); } };
+  app.querySelector('#pSlide').onclick = () => { state.start = SLIDE_PERIOD.start; state.end = SLIDE_PERIOD.end; ds.value = state.start; de.value = state.end; update(); };
+  app.querySelector('#pLatest').onclick = () => { state.start = SLIDE_PERIOD.start; state.end = lastDate(); ds.value = state.start; de.value = state.end; update(); };
+  renderPanel(plan);
+  update();
+  fit();
+}
+function update(){
+  const r = compute();
+  const plan = PLANS.find(p => p.id === state.plan);
+  document.getElementById('slide').innerHTML = slideHTML(plan, r);
+  document.getElementById('note').innerHTML = noteHTML(r);
+  const sumEl = document.getElementById('sum');
+  if (sumEl){ sumEl.className = 'sum ' + (Math.abs(r.sum-100) < 1e-6 ? 'good' : 'bad'); sumEl.lastElementChild.textContent = fmtNum(r.sum) + '%'; }
+  const thrEl = document.getElementById('thr');
+  if (thrEl) thrEl.textContent = r.thr != null ? (r.thr*100).toFixed(3).replace(/0+$/,'').replace(/\.$/,'') + '%' : '—';
+}
+const fmtNum = x => (Math.round(x*100)/100).toString();
+
+function colorsFor(models, raw){
+  // largest weight -> blue, the rest in order: grey, navy, light ...
+  const big = models.reduce((b,m) => (+raw[m] > +raw[b] ? m : b), models[0]);
+  const rest = ['var(--c2)','var(--c3)','var(--c4)','var(--c5)','var(--c6)','#c8ced9','#8fa0bb'];
+  const out = {}; let k = 0;
+  models.forEach(m => { out[m] = m === big ? 'var(--c1)' : rest[k++ % rest.length]; });
+  return out;
+}
+
+function slideHTML(plan, r){
+  const meta = plan.id === 'diy' ? state.meta.diy : plan;
+  const models = r.models;
+  if (!models.length) return `<div class="s-msg">เพิ่มโมเดลอย่างน้อย 1 ตัวในแผงด้านขวา</div>`;
+  const col = colorsFor(models, r.raw);
+  const titleBlock = `<div class="s-title"><div class="n">${esc(meta.name)}</div><div class="r">- Risk Profile: ${esc(meta.risk)} -</div></div>`;
+  if (Math.abs(r.sum-100) > 1e-6) return `<div class="s-msg">สัดส่วนรวม ${fmtNum(r.sum)}% — ต้องเท่ากับ 100% ถึงจะคำนวณได้</div>`;
+  if (r.missing) return `<div class="s-msg">ไม่มีข้อมูลของ ${r.missing.join(', ')} ในไฟล์ CSV</div>`;
+  if (r.short) return `<div class="s-msg">ช่วงข้อมูลสั้นเกินไป ลองขยายช่วงวันที่</div>`;
+  const yrs = Math.round(r.years), p = r.port;
+  // strategy groups (rowspan for consecutive same strategy)
+  const rows = r.rows.map((row,i) => {
+    const s = MODEL_INFO[row.m].strategy, prev = i ? MODEL_INFO[r.rows[i-1].m].strategy : null;
+    let span = 0; if (s !== prev){ span = 1; while (i+span < r.rows.length && MODEL_INFO[r.rows[i+span].m].strategy === s) span++; }
+    return `<tr>
+      ${span ? `<td class="strat" rowspan="${span}">${esc(s).replace(' With', '<br>With').replace('Max ', 'Max<br>').replace('Stabilizer', '<br>Stabilizer').replace(/^Core <br>/, 'Core<br>').replace('Engine','<br>Engine').replace('Growth <br>','Growth<br>')}</td>` : ''}
+      <td class="model"><i style="background:${col[row.m]}"></i>${row.m}</td>
+      <td class="${cls(row.st.total)}">${pct(row.st.total)}</td>
+      <td class="${cls(row.st.rollAvg)}">${pct(row.st.rollAvg)}</td>
+      <td class="${cls(row.st.maxDD)}">${pct(row.st.maxDD, {dp: Math.abs(row.st.maxDD) < 0.001 ? 2 : 1})}</td>
+      <td>${recShort(row.st.recLongest)}</td></tr>`;
+  }).join('');
+  const rec1 = recLong(p.recMedian), rec2 = recLong(p.recLongest);
+  return `
+    <svg class="s-donut" viewBox="0 0 520 420" aria-label="สัดส่วนพอร์ต">${donut(models, r.raw, col)}</svg>
+    <div class="s-legend">${models.map(m => `<span><i style="background:${col[m]}"></i>${m}</span>`).join('')}</div>
+    <div class="s-table">
+      ${titleBlock}
+      <table class="tbl ${models.length > 3 ? 'compact' : ''}">
+        <thead>
+          <tr><th rowspan="2" style="width:120px">Strategy</th><th rowspan="2" style="width:150px">Portfolio Model</th><th colspan="4">${yrs}-Year Performance (${r.start.slice(0,4)} - ${r.end.slice(0,4)})</th></tr>
+          <tr><th>Total<br>Return</th><th>1Y Rolling<br>Average</th><th>Max<br>Drawdown</th><th>Recovery<br>Period</th></tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <div class="boxes">
+      <div class="box"><h4>Return</h4>
+        <div class="brow"><div class="k">1Y Rolling<br>Average</div><div class="v big ${cls(p.rollAvg)}">${pct(p.rollAvg)}</div></div>
+        <div class="brow"><div class="k" style="font-size:13.5px">${yrs}Y<br>Total Return</div><div class="v small ${cls(p.total)}">${pct(p.total)}</div></div></div>
+      <div class="box"><h4>${yrs}Y Drawdown</h4>
+        <div class="brow"><div class="k">Median</div><div class="v ${cls(p.cycDDMedian)}">${pct(p.cycDDMedian)}</div></div>
+        <div class="brow"><div class="k">Max</div><div class="v ${cls(p.maxDD)}">${pct(p.maxDD)}</div></div></div>
+      <div class="box"><h4>Recovery Period</h4>
+        <div class="brow"><div class="k">Median</div><div class="v dark">${rec1.v}<span class="u">${rec1.u}</span></div></div>
+        <div class="brow"><div class="k">Longest</div><div class="v dark">${rec2.v}<span class="u">${rec2.u}</span></div></div></div>
+      <div class="box"><h4>1Y Rolling Return<sup>*</sup></h4>
+        <div class="brow"><div class="k">Min</div><div class="v ${cls(p.rollMin)}">${pct(p.rollMin)}</div></div>
+        <div class="brow"><div class="k">Max</div><div class="v ${cls(p.rollMax)}">${pct(p.rollMax)}</div></div></div>
+    </div>
+    <div class="foot">
+      <b>ผลการดำเนินงานย้อนหลัง</b> คำนวณจากข้อมูล ${thMonYear(r.start)} – ${thMonYear(r.end)} | <b>*1Y Rolling Return</b> แสดงผลข้อมูล ${p.rollStart ? thMonYear(p.rollStart) : '—'} – ${thMonYear(r.end)}<br>
+      หมายเหตุ : ผลการดำเนินงานในอดีต มิได้เป็นสิ่งยืนยันถึงผลการดำเนินงานในอนาคต ผู้ลงทุนโปรดทำความเข้าใจลักษณะสินค้า เงื่อนไขผลตอบแทนและความเสี่ยง ก่อนตัดสินใจลงทุน
+    </div>`;
+}
+
+function donut(models, raw, col){
+  const cx = 260, cy = 205, R = 152, r = 117, total = models.reduce((a,m) => a + (+raw[m]||0), 0);
+  let a0 = -Math.PI/2, out = '';
+  const pt = (rad, a) => [cx + rad*Math.cos(a), cy + rad*Math.sin(a)];
+  const labels = [];
+  models.forEach(m => {
+    const v = +raw[m] || 0; if (v <= 0) return;
+    const a1 = a0 + v/total*2*Math.PI, large = a1 - a0 > Math.PI ? 1 : 0;
+    if (v >= total - 1e-9){
+      out += `<circle cx="${cx}" cy="${cy}" r="${(R+r)/2}" fill="none" stroke="${col[m]}" stroke-width="${R-r}"/>`;
+    } else {
+      const [x1,y1] = pt(R,a0), [x2,y2] = pt(R,a1), [x3,y3] = pt(r,a1), [x4,y4] = pt(r,a0);
+      out += `<path d="M${x1},${y1} A${R},${R} 0 ${large} 1 ${x2},${y2} L${x3},${y3} A${r},${r} 0 ${large} 0 ${x4},${y4}Z" fill="${col[m]}" stroke="#fff" stroke-width="1.5"/>`;
+    }
+    labels.push({m, v, am:(a0+a1)/2}); a0 = a1;
+  });
+  // labels with leader lines
+  labels.forEach(L => {
+    const right = Math.cos(L.am) >= 0;
+    const [sx,sy] = pt((R+r)/2, L.am);
+    let ly = cy + (R+22)*Math.sin(L.am); ly = Math.max(40, Math.min(390, ly));
+    const lx = right ? cx + R + 40 : cx - R - 40;
+    out += `<polyline points="${sx},${sy} ${lx + (right?-6:6)},${ly}" fill="none" stroke="#9aa3b2" stroke-width="1"/>`;
+    const tx = right ? lx : lx, anchor = right ? 'start' : 'end';
+    out += `<text x="${tx}" y="${ly-10}" text-anchor="${anchor}" font-size="14" font-weight="600" fill="#16233a">${L.m}</text>`;
+    out += `<text x="${tx}" y="${ly+14}" text-anchor="${anchor}" font-size="22" font-weight="600" fill="#16233a">${fmtNum(L.v)}%</text>`;
+  });
+  out += `<text x="${cx}" y="${cy-48}" text-anchor="middle" font-size="19" font-weight="500" fill="#16233a">Portfolio Value</text>`;
+  out += `<text x="${cx}" y="${cy+66}" text-anchor="middle" font-size="24" font-weight="600" fill="#16233a">ล้านบาท</text>`;
+  return out;
+}
+
+function noteHTML(r){
+  if (!r.port) return '';
+  const parts = [];
+  parts.push(`ช่วงคำนวณ ${thDate(r.start)} – ${thDate(r.end)} · เกณฑ์นับ drawdown ของพอร์ตนี้ ${(r.thr*100).toFixed(3).replace(/0+$/,'').replace(/\.$/,'')}% · จำนวน cycle ${r.port.nCycles.toLocaleString()}`);
+  if (r.backfilled.length){
+    if (BACKFILL) parts.push('ใช้ผลทดสอบย้อนหลังสำหรับ ' + r.backfilled.map(b => `${b.m} ก่อน ${thDate(b.from)}`).join(' และ '));
+  }
+  if (!BACKFILL && r.port){
+    const late = r.rows.map(x => WP.firstDate(FULL, x.m)).sort().pop();
+    if (late > state.start) parts.push(`<span style="color:var(--neg)">ยังไม่มีข้อมูลย้อนหลังของ FIXEDTDP/TCT — พอร์ตเริ่มคำนวณที่ ${thDate(r.start)}</span>`);
+  }
+  return parts.join('<br>');
+}
+
+function renderPanel(plan){
+  const raw = state.weights[plan.id];
+  const models = MODEL_ORDER.filter(m => raw[m] != null);
+  const avail = MODEL_ORDER.filter(m => raw[m] == null && DATA.csv.models[m]);
+  const col = models.length ? colorsFor(models, raw) : {};
+  const isDiy = plan.id === 'diy';
+  const el = document.getElementById('panel');
+  el.innerHTML = `
+    <h3>${isDiy ? 'จัดพอร์ตเอง (DIY)' : 'แผน ' + plan.no + ' · ' + esc(plan.name)}</h3>
+    <div class="sub">ปรับ % ได้ ผลบนสไลด์อัปเดตทันที</div>
+    ${isDiy ? `
+      <label class="field">ชื่อพอร์ต<input id="mName" value="${esc(state.meta.diy.name)}"></label>
+      <label class="field">Risk Profile<input id="mRisk" value="${esc(state.meta.diy.risk)}"></label>` : ''}
+    <div id="wrows">
+      ${models.map(m => `<div class="wrow">
+        <span class="sw" style="background:${col[m]}"></span><span class="nm">${m}</span>
+        <input type="number" min="0" max="100" step="1" id="w-${m}" data-m="${m}" value="${raw[m]}" aria-label="สัดส่วน ${m}">
+        <span>%</span>
+        <button class="x" data-del="${m}" title="ลบ ${m}" aria-label="ลบ ${m}">×</button></div>`).join('')}
+    </div>
+    <div class="sum" id="sum"><span>รวม</span><span></span></div>
+    ${avail.length ? `<div class="addrow"><select id="addSel">${avail.map(m => `<option>${m}</option>`).join('')}</select><button class="btn ghost" id="addBtn">เพิ่ม</button></div>` : ''}
+    ${!isDiy ? `<div class="addrow"><button class="btn ghost" id="resetBtn" style="flex:1">คืนค่าสัดส่วนเดิมของแผน</button></div>` : ''}
+    <div class="meta">
+      เกณฑ์นับ drawdown ของพอร์ต: <b id="thr">—</b><br>
+      = ผลรวมของ (สัดส่วน × เกณฑ์ของแต่ละโมเดล)<br>
+      ${models.map(m => `${m} ${MODEL_INFO[m].filter}%`).join(' · ')}
+    </div>`;
+  el.querySelectorAll('input[data-m]').forEach(inp => inp.oninput = () => { raw[inp.dataset.m] = inp.value === '' ? 0 : +inp.value; update(); });
+  el.querySelectorAll('[data-del]').forEach(b => b.onclick = () => { delete raw[b.dataset.del]; renderPanel(plan); update(); });
+  const add = el.querySelector('#addBtn'); if (add) add.onclick = () => { raw[el.querySelector('#addSel').value] = 0; renderPanel(plan); update(); };
+  const rs = el.querySelector('#resetBtn'); if (rs) rs.onclick = () => { state.weights[plan.id] = {...plan.w}; renderPanel(plan); update(); };
+  if (isDiy){
+    el.querySelector('#mName').oninput = e => { state.meta.diy.name = e.target.value; update(); };
+    el.querySelector('#mRisk').oninput = e => { state.meta.diy.risk = e.target.value; update(); };
+  }
+}
+
+function renderInfo(){
+  const el = document.getElementById('datainfo');
+  if (!DATA || !DATA.csv){ el.innerHTML = ''; return; }
+  el.innerHTML = `
+    <span class="chip">Model Performance: <b>ข้อมูลถึง ${thDate(lastDate())}</b></span>
+    <button class="btn" id="upBtn">อัปเดตไฟล์</button>`;
+  el.querySelector('#upBtn').onclick = pickFiles;
+}
+
+function renderUpload(err){
+  app.innerHTML = `
+    <div class="drop" id="drop">
+      <h2>อัปโหลดข้อมูลเพื่อเริ่มใช้งาน</h2>
+      <div style="color:var(--muted)">ข้อมูลอยู่ในเบราว์เซอร์เครื่องนี้เท่านั้น ไม่ถูกส่งหรือเก็บไว้ที่อื่น</div>
+      <p style="margin:14px 0 18px">เลือกไฟล์ <b>Model Performance_data.csv</b> (ข้อมูลผลตอบแทนรายวันของแต่ละโมเดล)<br>
+      <span style="color:var(--muted);font-size:13px">ข้อมูลย้อนหลังของ FIXEDTDP และ TCT ช่วงก่อนเริ่มโมเดลมีอยู่ในหน้านี้แล้ว</span></p>
+      <button class="btn" id="pick">เลือกไฟล์ CSV</button>
+      <div class="hint">หรือลากไฟล์มาวางในกรอบนี้</div>
+      ${err ? `<div class="err">${esc(err)}</div>` : ''}
+    </div>`;
+  app.querySelector('#pick').onclick = pickFiles;
+  const d = app.querySelector('#drop');
+  d.ondragover = e => { e.preventDefault(); d.classList.add('over'); };
+  d.ondragleave = () => d.classList.remove('over');
+  d.ondrop = e => { e.preventDefault(); d.classList.remove('over'); handleFiles([...e.dataTransfer.files]); };
+}
+
+/* scale the 1280x720 slide to the available width */
+function fit(){
+  const sc = document.getElementById('scaler'), sl = document.getElementById('slide');
+  if (!sc || !sl) return;
+  const k = sc.clientWidth / 1280;
+  sl.style.transform = `scale(${k})`; sc.style.height = (720*k) + 'px';
+}
+window.addEventListener('resize', fit);
+if (window.ResizeObserver) new ResizeObserver(fit).observe(document.body);
+
+/* boot */
+DATA = load();
+if (DATA && DATA.csv){ prepare(); state.start = SLIDE_PERIOD.start; state.end = lastDate(); }
+render();
+</script>
+</body>
+</html>
