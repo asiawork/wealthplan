@@ -844,14 +844,14 @@ function drawEquity(r){
   // back-filled stretch (latest inception among used models that lean on backfill)
   const bfEnd = r.backfilled.length ? r.backfilled.map(b => b.from).sort().pop() : null;
 
-  const W = 1100, padL = 56, padR = 18, H1 = 300, H2 = 150, padT = 12, padB = 26;
+  const W = 1100, padL = 56, padR = 18, H1 = 300, H2 = 190, padT = 12, padB = 26, ddRoom = 30;
   const x = i => padL + (W - padL - padR) * i / (n - 1);
   const all = series.flatMap(s => s.v).filter(v => v != null);
   let lo = Math.min(0, ...all), hi = Math.max(0, ...all);
   const st = niceStep(hi - lo || 0.01, 5); lo = Math.floor(lo / st) * st; hi = Math.ceil(hi / st) * st;
   const y1 = v => padT + (H1 - padT - padB) * (hi - v) / (hi - lo);
   const ddLo0 = Math.min(...dd), st2 = niceStep(-ddLo0 || 0.001, 3), ddLo = Math.floor(ddLo0 / st2) * st2 || -st2;
-  const y2 = v => padT + (H2 - padT - padB) * (0 - v) / (0 - ddLo);
+  const y2 = v => padT + (H2 - padT - padB - ddRoom) * (0 - v) / (0 - ddLo);
   const pctTick = (v, s) => { const d = s * 100 < 1 ? (s * 100 < 0.1 ? 2 : 1) : 0; return (v > 0 ? '+' : '') + (v * 100).toFixed(d) + '%'; };
   const years = []; let lastY = null; pf.dates.forEach((d,i) => { const yy = d.slice(0,4); if (yy !== lastY){ if (lastY && d.slice(5,7) === '01') years.push({i, yy}); lastY = yy; } });
   const grid = (H, yf, ticks, s) => ticks.map(v => `<line x1="${padL}" x2="${W-padR}" y1="${yf(v)}" y2="${yf(v)}" stroke="${Math.abs(v) < 1e-12 ? '#8b93a3' : '#e6e9ef'}" stroke-width="1"/><text x="${padL-8}" y="${yf(v)+4}" text-anchor="end" font-size="11.5" fill="#6a7488">${pctTick(v, s)}</text>`).join('')
@@ -860,7 +860,17 @@ function drawEquity(r){
   const path = (v, yf) => { let s = '', pen = false; v.forEach((val,i) => { if (val == null){ pen = false; return; } s += (pen ? 'L' : 'M') + x(i).toFixed(1) + ',' + yf(val).toFixed(1); pen = true; }); return s; };
   const bfI = bfEnd ? pf.dates.findIndex(d => d >= bfEnd) : -1;
   const bfRect = (H, label) => bfI > 0 ? `<rect x="${padL}" y="${padT}" width="${x(bfI)-padL}" height="${H-padT-padB}" fill="#f2f4f8"/>${label ? `<text x="${padL+8}" y="${padT+14}" font-size="11" fill="#8b93a3">ช่วงใช้ผลทดสอบย้อนหลัง</text>` : ''}` : '';
-  const mddBand = `<rect x="${x(pi)}" y="${padT}" width="${Math.max(1, x(mi)-x(pi))}" height="${H2-padT-padB}" fill="rgba(227,25,27,.08)"/>`;
+  // max drawdown episode: peak -> back to that peak (recovery)
+  const ri = r.mdd.recovered ? pf.dates.indexOf(r.mdd.rec) : n - 1;
+  const recTxt = d => { const q = recLong(d); return q.v + ' ' + (q.u === 'months' ? 'เดือน' : 'ปี'); };
+  const mddBand = `<rect x="${x(pi)}" y="${padT}" width="${Math.max(2, x(ri)-x(pi))}" height="${H2-padT-padB}" fill="rgba(227,25,27,.10)"/>`;
+  const ay = y2(dd[mi]) + 16, lblRight = x(ri) + 8 + 260 < W - padR;
+  const mddLbl = `Max ${pct(dd[mi])} · ${r.mdd.recovered ? 'Recovery ' + recTxt(r.mdd.days) : 'ยังไม่กลับถึงจุดสูงสุดเดิม'}`;
+  const mddMark = `<defs><marker id="arw2" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" fill="var(--navy)"/></marker></defs>
+    <line x1="${x(pi)}" x2="${x(pi)}" y1="${y2(0)}" y2="${ay + 5}" stroke="var(--navy)" stroke-width="1" stroke-dasharray="2 2"/>
+    <line x1="${x(ri)}" x2="${x(ri)}" y1="${y2(0)}" y2="${ay + 5}" stroke="var(--navy)" stroke-width="1" stroke-dasharray="2 2"/>
+    <line x1="${x(pi)}" x2="${x(ri)}" y1="${ay}" y2="${ay}" stroke="var(--navy)" stroke-width="1.5" marker-start="url(#arw2)" ${r.mdd.recovered ? 'marker-end="url(#arw2)"' : ''}/>
+    <text x="${lblRight ? x(ri) + 8 : x(pi) - 8}" y="${ay + 4}" text-anchor="${lblRight ? 'start' : 'end'}" font-size="12.5" font-weight="600" fill="var(--navy)" stroke="#fff" stroke-width="4" paint-order="stroke">${mddLbl}</text>`;
 
   const svg1 = `<svg viewBox="0 0 ${W} ${H1}" id="eqSvg" role="img" aria-label="ผลตอบแทนสะสม">
     ${bfRect(H1, true)}${grid(H1, y1, ticks(lo, hi, st), st)}
@@ -875,56 +885,18 @@ function drawEquity(r){
     <path d="${path(dd, y2)}L${x(n-1)},${y2(0)}L${x(0)},${y2(0)}Z" fill="rgba(227,25,27,.18)"/>
     <path d="${path(dd, y2)}" fill="none" stroke="var(--neg)" stroke-width="1.4"/>
     <circle cx="${x(mi)}" cy="${y2(dd[mi])}" r="4" fill="var(--neg)"/>
-    <text x="${x(mi) + (mi > n*0.8 ? -8 : 8)}" y="${Math.min(y2(dd[mi]) + 4, H2-padB-4)}" text-anchor="${mi > n*0.8 ? 'end' : 'start'}" font-size="12.5" font-weight="600" fill="var(--neg)">Max ${pct(dd[mi])} (${thDate(pf.dates[mi])}) · ${r.mdd.recovered ? 'ฟื้นใน ' + recLong(r.mdd.days).v + ' ' + (recLong(r.mdd.days).u === 'months' ? 'เดือน' : 'ปี') : 'ยังไม่ฟื้น'}</text>
+    ${mddMark}
     <line id="eqX2" y1="${padT}" y2="${H2-padB}" stroke="#16233a" stroke-dasharray="3 3" visibility="hidden"/>
   </svg>`;
   /* ---- where the median comes from: one mark per counted cycle (entry date) ---- */
   const cyc = WP.cycles(pf, r.thr);
-  const metric = EQ.metric || 'dd';
-  // drawdown episodes on the equity curve: peak -> trough -> back to that peak (deeper than the threshold)
-  const eps = []; { const v = pf.nav; let pk = 0, cur = null;
-    for (let i = 0; i < n; i++){
-      if (v[i] >= v[pk]){ if (cur){ cur.k = i; eps.push(cur); cur = null; } pk = i; continue; }
-      const d = v[i] / v[pk] - 1;
-      if (!cur) cur = {i: pk, ti: i, dd: d};
-      if (d < cur.dd){ cur.dd = d; cur.ti = i; }
-    }
-    if (cur){ cur.k = n - 1; cur.active = true; eps.push(cur); }
-    eps.forEach(e => { e.active = !!e.active; e.days = WP.daysBetween(pf.dates[e.i], pf.dates[e.k]); });
-  }
-  const maxEp = eps.reduce((a, e) => (!a || e.dd < a.dd ? e : a), null);
-  const shownEps = eps.filter(e => e.dd <= -r.thr || e === maxEp);
+  const metric = EQ.metric === 'rec' ? 'rec' : 'dd';
   const tabsHTML = `<div class="tabs" role="group" aria-label="เลือกค่าที่ดู" style="padding:3px">
-      <button class="tab" data-metric="dd" aria-pressed="${metric === 'dd'}">Median Drawdown</button>
-      <button class="tab" data-metric="rec" aria-pressed="${metric === 'rec'}">Median Recovery</button>
-      <button class="tab" data-metric="max" aria-pressed="${metric === 'max'}">Max Drawdown & Recovery</button></div>`;
+      <button class="tab" data-metric="dd" aria-pressed="${metric === 'dd'}">Drawdown</button>
+      <button class="tab" data-metric="rec" aria-pressed="${metric === 'rec'}">Recovery Period</button></div>`;
   const thrTxt = (r.thr*100).toFixed(3).replace(/0+$/,'').replace(/\.$/,'');
-  const recTxt = d => { const x = recLong(d); return x.v + ' ' + (x.u === 'months' ? 'เดือน' : 'ปี'); };
   let cycleHTML = '';
-  if (metric === 'max' && maxEp){
-    const H3 = 190, lo0 = Math.min(...shownEps.map(e => e.dd)), s3 = niceStep(-lo0 || 0.001, 3), lo3 = Math.floor(lo0 / s3) * s3 || -s3;
-    const y3 = v => padT + (H3 - padT - padB) * (0 - v) / (0 - lo3);
-    const g3 = ticks(lo3, 0, s3).map(v => `<line x1="${padL}" x2="${W-padR}" y1="${y3(v)}" y2="${y3(v)}" stroke="${Math.abs(v) < 1e-12 ? '#8b93a3' : '#e6e9ef'}"/><text x="${padL-8}" y="${y3(v)+4}" text-anchor="end" font-size="11.5" fill="#6a7488">${pctTick(v, s3)}</text>`).join('')
-      + years.map(o => `<line x1="${x(o.i)}" x2="${x(o.i)}" y1="${padT}" y2="${H3-padB}" stroke="#eef0f4"/><text x="${x(o.i)}" y="${H3-8}" text-anchor="middle" font-size="11.5" fill="#6a7488">${o.yy}</text>`).join('');
-    const spans = shownEps.map(e => { const isMax = e === maxEp;
-      return `<rect x="${x(e.i).toFixed(1)}" y="${y3(0)}" width="${Math.max(2, x(e.k) - x(e.i)).toFixed(1)}" height="${(y3(e.dd) - y3(0)).toFixed(1)}" fill="${isMax ? 'rgba(227,25,27,.75)' : e.active ? 'rgba(195,201,212,.8)' : 'rgba(227,25,27,.25)'}" stroke="${isMax ? 'var(--neg)' : 'none'}"/>`; }).join('');
-    const mx = maxEp, lx = (x(mx.i) + x(mx.k)) / 2, right = lx > W * 0.6;
-    const lbl = `Max ${pct(mx.dd)} · ${mx.active ? 'ยังไม่ฟื้น' : 'Recovery ' + recTxt(mx.days)}`;
-    const svg3 = `<svg viewBox="0 0 ${W} ${H3}" id="cySvg" role="img" aria-label="drawdown episodes">
-      ${bfRect(H3, false)}${g3}${spans}
-      <line x1="${x(mx.i)}" x2="${x(mx.k)}" y1="${y3(mx.dd) + 10}" y2="${y3(mx.dd) + 10}" stroke="var(--navy)" stroke-width="1.5" marker-start="url(#arw)" marker-end="url(#arw)"/>
-      <defs><marker id="arw" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" fill="var(--navy)"/></marker></defs>
-      <text x="${right ? x(mx.i) - 8 : x(mx.k) + 8}" y="${Math.min(y3(mx.dd) + 14, H3 - padB - 4)}" text-anchor="${right ? 'end' : 'start'}" font-size="12.5" font-weight="600" fill="var(--navy)" stroke="#fff" stroke-width="4" paint-order="stroke">${lbl}</text>
-      <line id="eqX3" y1="${padT}" y2="${H3-padB}" stroke="#16233a" stroke-dasharray="3 3" visibility="hidden"/>
-    </svg>`;
-    cycleHTML = `
-      <div class="eq-head" style="margin-top:18px"><h3>ที่มาของตัวเลข Drawdown & Recovery</h3>${tabsHTML}</div>
-      <div class="hint" style="margin:0 0 6px">
-        แต่ละแถบ = 1 ช่วงบน Equity Curve ที่พอร์ตลงจากจุดสูงสุดเกิน <b>${thrTxt}%</b> จนกลับมาถึงจุดสูงสุดเดิม · ความกว้างแถบ = Recovery · ความลึก = Drawdown (แถบสีเทา = ยังไม่กลับถึงจุดสูงสุดเดิม)<br>
-        มี <b>${shownEps.length}</b> ช่วง → ลึกที่สุดคือ <b>Max Drawdown ${pct(mx.dd)}</b>: จุดสูงสุด ${thDate(pf.dates[mx.i])} → ต่ำสุด ${thDate(pf.dates[mx.ti])} → ${mx.active ? '<b>ยังไม่กลับถึงจุดสูงสุดเดิม</b>' : `กลับถึงจุดสูงสุดเดิม ${thDate(pf.dates[mx.k])} · <b>Recovery ${recTxt(mx.days)}</b>`}
-        <span style="color:var(--muted)">· ชี้ที่แถบเพื่อดูช่วงนั้นบน Equity Curve</span></div>
-      <div class="eq-wrap" id="cyWrap">${svg3}<div class="eq-tip" id="cyTip" hidden></div></div>`;
-  } else if (cyc.length){
+  if (cyc.length){
     const H3 = 190, isDD = metric === 'dd';
     const val = c => isDD ? c.dd : c.days;
     const pool = isDD ? cyc : cyc.filter(c => !c.active);
@@ -958,7 +930,7 @@ function drawEquity(r){
       <line id="eqX3" y1="${padT}" y2="${H3-padB}" stroke="#16233a" stroke-dasharray="3 3" visibility="hidden"/>
     </svg>`;
     cycleHTML = `
-      <div class="eq-head" style="margin-top:18px"><h3>ที่มาของตัวเลข Drawdown & Recovery</h3>${tabsHTML}</div>
+      <div class="eq-head" style="margin-top:18px"><h3>ที่มาของค่า Median</h3>${tabsHTML}</div>
       <div class="hint" style="margin:0 0 6px">
         แต่ละแท่ง = 1 cycle คือวันที่ถ้าเข้าลงทุนแล้ว พอร์ตลงเกิน <b>${thrTxt}%</b> ภายใน 84 วันทำการ (≈ 4 เดือน)
         ${isDD ? 'ความสูงแท่ง = จุดต่ำสุดเทียบกับมูลค่าวันที่เข้า' : 'ความสูงแท่ง = จำนวนวันจนมูลค่ากลับมาเท่าวันที่เข้า (แท่งสีเทา = ยังไม่ฟื้น ไม่นับใน Median)'}<br>
@@ -967,7 +939,7 @@ function drawEquity(r){
         <span style="color:var(--muted)">· ชี้ที่แท่งเพื่อดูช่วงของ cycle นั้นบน Equity Curve</span></div>
       <div class="eq-wrap" id="cyWrap">${svg3}<div class="eq-tip" id="cyTip" hidden></div></div>`;
   } else {
-    cycleHTML = `<div class="eq-head" style="margin-top:18px"><h3>ที่มาของตัวเลข Drawdown & Recovery</h3>${tabsHTML}</div><div class="hint">ไม่มีช่วงไหนที่พอร์ตลงเกินเกณฑ์ ${(r.thr*100).toFixed(2)}% ภายใน 84 วันทำการ จึงไม่มี cycle ให้คำนวณ Median</div>`;
+    cycleHTML = `<div class="eq-head" style="margin-top:18px"><h3>ที่มาของค่า Median</h3>${tabsHTML}</div><div class="hint">ไม่มีช่วงไหนที่พอร์ตลงเกินเกณฑ์ ${(r.thr*100).toFixed(2)}% ภายใน 84 วันทำการ จึงไม่มี cycle ให้คำนวณ Median</div>`;
   }
 
   box.innerHTML = `
@@ -980,7 +952,8 @@ function drawEquity(r){
       ${bfI > 0 ? `<span><i class="box" style="background:#e9ecf2"></i>ช่วงใช้ผลทดสอบย้อนหลัง</span>` : ''}
     </div>
     <div class="eq-wrap" id="eqWrap">${svg1}
-      <div class="eq-sub">Drawdown จากจุดสูงสุด <span style="font-weight:400;color:var(--muted);font-size:12px">· แถบแดงอ่อน = ช่วงลงจนถึงจุด Max Drawdown</span></div>
+      <div class="eq-sub">Drawdown จากจุดสูงสุด · Max Drawdown & Recovery</div>
+      <div class="hint" style="margin:0 0 4px">แถบแดง = ช่วง Max Drawdown: จุดสูงสุด ${thDate(r.mdd.peak)} → ต่ำสุด ${thDate(r.mdd.trough)} (<b>${pct(r.mdd.dd)}</b>) → ${r.mdd.recovered ? `กลับถึงจุดสูงสุดเดิม ${thDate(r.mdd.rec)} · <b>Recovery ${recTxt(r.mdd.days)}</b>` : '<b>ยังไม่กลับถึงจุดสูงสุดเดิม</b>'}</div>
       ${svg2}
       <div class="eq-tip" id="eqTip" hidden></div></div>
     ${cycleHTML}`;
@@ -1005,7 +978,6 @@ function drawEquity(r){
   const s3 = box.querySelector('#cySvg');
   if (s3){
     const tip3 = box.querySelector('#cyTip'), l3 = box.querySelector('#eqX3'), wrap3 = box.querySelector('#cyWrap');
-    const isMaxTab = metric === 'max' && maxEp;
     const byI = new Map(cyc.map(c => [c.i, c]));
     const hl = document.createElementNS('http://www.w3.org/2000/svg', 'g'); s1.insertBefore(hl, s1.querySelector('#eqX1'));
     const hl2 = document.createElementNS('http://www.w3.org/2000/svg', 'g'); s2.insertBefore(hl2, s2.querySelector('#eqX2'));
@@ -1015,8 +987,7 @@ function drawEquity(r){
       const rc = s3.getBoundingClientRect(), k = rc.width / W, px = (ev.clientX - rc.left) / k;
       if (px < padL || px > W - padR){ clear(); return; }
       let i = Math.round((px - padL) / (W - padL - padR) * (n - 1)), c = null;
-      if (isMaxTab) c = shownEps.filter(e => e.i <= i && i <= e.k).sort((a, b) => a.dd - b.dd)[0] || null;
-      else for (let dlt = 0; dlt <= Math.ceil(4 / ((W - padL - padR) / n)) && !c; dlt++) c = byI.get(i + dlt) || byI.get(i - dlt);
+      for (let dlt = 0; dlt <= Math.ceil(4 / ((W - padL - padR) / n)) && !c; dlt++) c = byI.get(i + dlt) || byI.get(i - dlt);
       if (!c){ clear(); return; }
       l3.setAttribute('x1', x(c.i)); l3.setAttribute('x2', x(c.i)); l3.setAttribute('visibility','visible');
       const pv = series[0].v, ent = pv[c.i];
@@ -1028,8 +999,8 @@ function drawEquity(r){
       hl2.innerHTML = `<rect x="${x(c.i)}" y="${padT}" width="${Math.max(2, x(c.k)-x(c.i))}" height="${H2-padT-padB}" fill="rgba(31,95,191,.10)"/>`;
       const wr = wrap3.getBoundingClientRect();
       tip3.hidden = false;
-      tip3.innerHTML = (isMaxTab ? (c === maxEp ? '<b>Max Drawdown</b><br>' : '') + 'จุดสูงสุด' : 'เข้าลงทุน') + ` <b>${thDate(pf.dates[c.i])}</b><br>ต่ำสุด ${thDate(pf.dates[c.ti])}: <b>${pct(c.dd, {dp: Math.abs(c.dd) < 0.001 ? 2 : 1})}</b><br>`
-        + (c.active ? (isMaxTab ? 'ยังไม่กลับถึงจุดสูงสุดเดิม' : 'ยังไม่ฟื้นถึงมูลค่าวันที่เข้า') : `${isMaxTab ? 'กลับถึงจุดสูงสุดเดิม' : 'ฟื้น'} ${thDate(pf.dates[c.k])}: <b>${recLong(c.days).v} ${recLong(c.days).u}</b>`);
+      tip3.innerHTML = `เข้าลงทุน <b>${thDate(pf.dates[c.i])}</b><br>ต่ำสุด ${thDate(pf.dates[c.ti])}: <b>${pct(c.dd, {dp: Math.abs(c.dd) < 0.001 ? 2 : 1})}</b><br>`
+        + (c.active ? 'ยังไม่ฟื้นถึงมูลค่าวันที่เข้า' : `ฟื้น ${thDate(pf.dates[c.k])}: <b>${recLong(c.days).v} ${recLong(c.days).u}</b>`);
       tip3.style.left = Math.min(Math.max(rc.left - wr.left + x(c.i) * k, 90), wr.width - 90) + 'px';
       tip3.style.top = (ev.clientY - wr.top - 14) + 'px';
     });
