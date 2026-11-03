@@ -92,6 +92,8 @@ button,input,select{font-family:inherit;font-size:inherit;color:inherit}
 .groups{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:4px 24px}
 .drow .amt{grid-column:1/-1;font-size:12px;color:var(--muted);text-align:right;margin-top:-4px}
 .drow .amt:empty{display:none}
+.drow .amt.low{color:var(--neg);font-weight:600}
+#goMsg{max-width:760px;line-height:1.5}
 .go{display:flex;flex-wrap:wrap;align-items:center;gap:12px}
 .btn.big{font-size:16px;padding:11px 26px;border-radius:10px}
 .btn:disabled{opacity:.4;cursor:not-allowed}
@@ -160,6 +162,9 @@ button,input,select{font-family:inherit;font-size:inherit;color:inherit}
 .brow .v{text-align:center;font-size:29px;font-weight:600;font-variant-numeric:tabular-nums}
 .brow .v.big{font-size:34px}
 .brow .v.small{font-size:18px}
+.dv{display:block;font-family:var(--body);font-size:11px;font-weight:400;color:#333;line-height:1.1;margin-top:1px}
+.brow .v.big.wdv{font-size:30px;line-height:1}
+.tbl td .dv{font-size:10.5px}
 .brow .v .u{font-size:17px;font-weight:500;margin-left:4px;color:var(--ink)}
 .brow .v.dark{color:var(--ink)}
 .foot{position:absolute;right:34px;bottom:12px;text-align:right;font-family:var(--body);font-size:11px;color:#333;line-height:1.7}
@@ -401,6 +406,8 @@ const PLANS = [
   {id:'p5', no:5, name:'Alpha Multiplier', risk:'Aggressive', w:{AAA:50, TCT:50}},
   {id:'diy', no:null, name:'Wealth Solution Plan', risk:'', w:{}},
 ];
+const MIN_PER_MODEL = 0.5;            // ล้านบาท: ขั้นต่ำต่อโมเดล (500,000 บาท)
+const DIV_YIELD = {DAA: 0.031};      // เงินปันผลต่อปี บวกแบบไม่ทบต้น (ตามสไลด์เดิม)
 const RISK_LEVELS = ['Conservative','Conservative to Moderate','Moderate','Moderate to Aggressive','Aggressive'];
 const SLIDE_PERIOD = {start:'2019-04-01', end:'2026-04-24'};
 const STORE = 'wealthplan.csv.v2';
@@ -486,6 +493,10 @@ function compute(){
   res.rows = models.map(m => { const s = WP.portfolio(FULL, {[m]:1}, start, end); return {m, w:+raw[m], st: WP.stats(s, MODEL_INFO[m].filter/100)}; });
   res.start = start; res.end = end; res.pf = pf;
   res.years = WP.daysBetween(start, end) / 365.25;
+  // dividends: simple (non-compounded) add-on to Total Return and 1Y Rolling Average, as on the original slide
+  res.rows.forEach(row => { const y = DIV_YIELD[row.m] || 0; row.div = y ? {avg: y, total: y * res.years} : null; });
+  const pfY = Object.entries(w).reduce((a,[m,x]) => a + (DIV_YIELD[m] || 0) * x, 0);
+  res.div = pfY ? {avg: pfY, total: pfY * res.years} : null;
   { // the max-drawdown episode on the equity curve: peak -> trough -> back to that peak
     const v = pf.nav; let pk = 0, mi = 0, mpk = 0, worst = 0;
     for (let i = 0; i < v.length; i++){ if (v[i] >= v[pk]) pk = i; const d = v[i] / v[pk] - 1; if (d < worst){ worst = d; mi = i; mpk = pk; } }
@@ -509,6 +520,11 @@ function render(err=''){
 
 /* ---------- step 1: input ---------- */
 function planMeta(p){ return p.id === 'diy' ? {name: state.meta.diy.name, risk: state.meta.diy.risk} : p; }
+function lowModels(){
+  const amt = parseFloat(state.amount), raw = state.weights.diy;
+  if (!(amt > 0)) return [];
+  return MODEL_ORDER.filter(m => +raw[m] > 0 && amt * raw[m] / 100 < MIN_PER_MODEL - 1e-9);
+}
 function inputValid(){
   const amt = parseFloat(state.amount);
   const raw = state.weights[state.plan], sum = MODEL_ORDER.reduce((a,m) => a + (+raw[m] || 0), 0);
@@ -517,6 +533,12 @@ function inputValid(){
   if (state.plan === 'diy'){
     if (!state.meta.diy.risk) errs.push('เลือก Risk Level');
     if (Math.abs(sum - 100) > 1e-6) errs.push(`สัดส่วนรวมต้องเท่ากับ 100% (ตอนนี้ ${fmtNum(sum)}%)`);
+    const low = lowModels();
+    if (amt > 0 && low.length){
+      const minW = Math.min(...low.map(m => +raw[m]));
+      errs.push(`${low.map(m => `${m} ${fmtMoney(amt * raw[m] / 100)} ลบ.`).join(', ')} ต่ำกว่าขั้นต่ำ 5 แสนบาทต่อโมเดล — `
+        + `เพิ่มเงินลงทุนเป็นอย่างน้อย ${fmtMoney(Math.ceil(MIN_PER_MODEL / (minW / 100) * 2) / 2)} ล้านบาท หรือปรับสัดส่วนแต่ละตัวให้ได้อย่างน้อย ${fmtNum(Math.ceil(MIN_PER_MODEL / amt * 10000) / 100)}%`);
+    }
   }
   return errs;
 }
@@ -528,7 +550,7 @@ function renderInput(err){
     <div class="form">
       <section class="step">
         <div class="step-h"><span class="num">1</span><h2>จำนวนเงินลงทุน</h2></div>
-        <label class="money"><input type="number" id="amt" min="0" step="0.1" inputmode="decimal" placeholder="0" value="${esc(state.amount)}" aria-label="จำนวนเงินลงทุน (ล้านบาท)"><span>ล้านบาท</span></label>
+        <label class="money"><input type="number" id="amt" min="0" step="0.5" inputmode="decimal" placeholder="0" value="${esc(state.amount)}" aria-label="จำนวนเงินลงทุน (ล้านบาท)"><span>ล้านบาท</span></label>
       </section>
 
       <section class="step">
@@ -553,7 +575,7 @@ function renderInput(err){
             <option value="" ${!state.meta.diy.risk ? 'selected' : ''} disabled>เลือก Risk Level</option>
             ${RISK_LEVELS.map(r => `<option ${r === state.meta.diy.risk ? 'selected' : ''}>${r}</option>`).join('')}
           </select></label>
-        <div class="sub" style="margin:10px 0 2px">ใส่ % ของโมเดลที่ต้องการ ช่องที่เว้นว่างจะไม่นับ</div>
+        <div class="sub" style="margin:10px 0 2px">ใส่ % ของโมเดลที่ต้องการ ช่องที่เว้นว่างจะไม่นับ · แต่ละโมเดลต้องมีเงินลงทุนอย่างน้อย 5 แสนบาท</div>
         <div class="groups">
           ${GROUPS.map(g => `<div><div class="grp">${g.label}</div>` + g.models.filter(m => DATA.csv.models[m]).map(m => `
             <div class="drow">
@@ -578,7 +600,8 @@ function renderInput(err){
       const sum = MODEL_ORDER.reduce((a,m) => a + (+raw[m] || 0), 0), el = app.querySelector('#sum');
       el.className = 'sum ' + (Math.abs(sum - 100) < 1e-6 ? 'good' : 'bad'); el.lastElementChild.textContent = fmtNum(sum) + '%';
       const amt = parseFloat(state.amount) || 0;
-      MODEL_ORDER.forEach(m => { const a = app.querySelector('#a-' + m); if (a) a.textContent = amt > 0 && +raw[m] > 0 ? fmtMoney(amt * raw[m] / 100) + ' ลบ.' : ''; });
+      const low = new Set(lowModels());
+      MODEL_ORDER.forEach(m => { const a = app.querySelector('#a-' + m); if (a){ a.textContent = amt > 0 && +raw[m] > 0 ? fmtMoney(amt * raw[m] / 100) + ' ลบ.' + (low.has(m) ? ' · ต่ำกว่าขั้นต่ำ 5 แสน' : '') : ''; a.classList.toggle('low', low.has(m)); } });
     }
   };
   app.querySelector('#amt').oninput = e => { state.amount = e.target.value; refresh(); };
@@ -679,8 +702,8 @@ function slideHTML(plan, r){
     return `<tr>
       ${span ? `<td class="strat${i + span === r.rows.length ? ' end' : ''}" rowspan="${span}">${esc(s).replace(' With', '<br>With').replace('Max ', 'Max<br>').replace('Stabilizer', '<br>Stabilizer').replace(/^Core <br>/, 'Core<br>').replace('Engine','<br>Engine').replace('Growth <br>','Growth<br>')}</td>` : ''}
       <td class="model"><i style="background:${col[row.m]}"></i>${row.m}</td>
-      <td class="${cls(row.st.total)}">${pct(row.st.total)}</td>
-      <td class="${cls(row.st.rollAvg)}">${pct(row.st.rollAvg)}</td>
+      <td class="${cls(row.st.total)}">${row.div ? pct(row.st.total + row.div.total) + `<span class="dv">(ปันผล ${pct(row.div.total)})</span>` : pct(row.st.total)}</td>
+      <td class="${cls(row.st.rollAvg)}">${row.div ? pct(row.st.rollAvg + row.div.avg) + `<span class="dv">(ปันผล ${pct(row.div.avg)})</span>` : pct(row.st.rollAvg)}</td>
       <td class="${cls(row.st.maxDD)}">${pct(row.st.maxDD, {dp: Math.abs(row.st.maxDD) < 0.001 ? 2 : 1})}</td>
       <td>${recShort(row.st.recLongest)}</td></tr>`;
   }).join('');
@@ -700,8 +723,8 @@ function slideHTML(plan, r){
     </div>
     <div class="boxes">
       <div class="box"><h4>Return</h4>
-        <div class="brow"><div class="k">1Y Rolling<br>Average</div><div class="v big ${cls(p.rollAvg)}">${pct(p.rollAvg)}</div></div>
-        <div class="brow"><div class="k" style="font-size:13.5px">${yrs}Y<br>Total Return</div><div class="v small ${cls(p.total)}">${pct(p.total)}</div></div></div>
+        <div class="brow"><div class="k">1Y Rolling<br>Average</div><div class="v big ${r.div ? 'wdv' : ''} ${cls(p.rollAvg)}">${r.div ? pct(p.rollAvg + r.div.avg) + `<span class="dv">(เงินปันผล ${pct(r.div.avg)})</span>` : pct(p.rollAvg)}</div></div>
+        <div class="brow"><div class="k" style="font-size:13.5px">${yrs}Y<br>Total Return</div><div class="v small ${cls(p.total)}">${r.div ? pct(p.total + r.div.total) + `<span class="dv">(เงินปันผล ${pct(r.div.total)})</span>` : pct(p.total)}</div></div></div>
       <div class="box"><h4>${yrs}Y Drawdown</h4>
         <div class="brow"><div class="k">Median</div><div class="v ${cls(p.cycDDMedian)}">${pct(p.cycDDMedian)}</div></div>
         <div class="brow"><div class="k">Max</div><div class="v ${cls(p.maxDD)}">${pct(p.maxDD)}</div></div></div>
@@ -959,6 +982,7 @@ function noteHTML(r){
   parts.push(`<b>Median</b> Drawdown ${pct(p.cycDDMedian)} · Recovery ${rl(p.recMedian)} — คิดจาก ${p.nCycles.toLocaleString()} cycle (วันที่ถ้าเข้าลงทุนแล้วพอร์ตลงเกิน ${thr}% ภายใน 84 วันทำการ)`);
   if (m && m.dd < 0) parts.push(`<b>Max</b> Drawdown ${pct(m.dd)} — จุดสูงสุด ${thDate(m.peak)} → ต่ำสุด ${thDate(m.trough)} → `
     + (m.recovered ? `กลับถึงจุดสูงสุดเดิม ${thDate(m.rec)} · <b>Recovery ${rl(m.days)}</b>` : `<b>ยังไม่กลับถึงจุดสูงสุดเดิม</b> (ผ่านมาแล้ว ${rl(m.days)})`));
+  if (r.div) parts.push(`รวมเงินปันผล DAA ${(DIV_YIELD.DAA*100).toFixed(1)}% ต่อปี (บวกแบบไม่ทบต้น) ใน Total Return และ 1Y Rolling Average เท่านั้น · กราฟและ Drawdown ไม่รวมปันผล`);
   if (r.backfilled.length && BACKFILL) parts.push('ใช้ผลทดสอบย้อนหลังสำหรับ ' + r.backfilled.map(b => `${b.m} ก่อน ${thDate(b.from)}`).join(' และ '));
   return parts.join('<br>');
 }
@@ -1082,7 +1106,8 @@ async function exportPPTX(){
         if (td.classList.contains('strat')) row.push({text: td.innerText.trim(), options: {...base, fontSize: 11, rowspan: span}});
         else if (td.classList.contains('model')) row.push({text: [{text: '● ', options: {color: hex(td.querySelector('i').style.background), fontSize: 14}},
                                                                      {text: td.textContent.trim(), options: {bold: true, fontFace: HF}}], options: {...base, align: 'left'}});
-        else row.push({text: td.textContent.trim(), options: {...base, color: td.classList.contains('pos') ? POS : td.classList.contains('neg') ? NEG : NAVY}});
+        else { const dv = td.querySelector('.dv'), c = td.classList.contains('pos') ? POS : td.classList.contains('neg') ? NEG : NAVY;
+          row.push({text: dv ? [{text: td.firstChild.textContent, options: {breakLine: true}}, {text: dv.textContent, options: {fontSize: 8, color: '333333'}}] : td.textContent.trim(), options: {...base, color: c}}); }
       });
       rows.push(row);
     });
@@ -1097,9 +1122,10 @@ async function exportPPTX(){
       bx.querySelectorAll('.brow').forEach((rw, i, all) => {
         const b = box(rw), kEl = rw.querySelector('.k'), vEl = rw.querySelector('.v'), kb = box(kEl), vb = box(vEl);
         s.addText(kEl.innerText.trim(), {x: kb.x, y: b.y, w: kb.w, h: b.h, margin: 0, fontFace: BF, fontSize: +getComputedStyle(kEl).fontSize.replace('px', '') * 0.75, color: NAVY, align: 'center', valign: 'middle'});
-        const u = vEl.querySelector('.u'), main = u ? vEl.firstChild.textContent : vEl.textContent;
+        const u = vEl.querySelector('.u'), dv = vEl.querySelector('.dv'), main = (u || dv) ? vEl.firstChild.textContent : vEl.textContent;
         const vc = vEl.classList.contains('pos') ? POS : vEl.classList.contains('neg') ? NEG : NAVY, vfs = +getComputedStyle(vEl).fontSize.replace('px', '') * 0.75;
-        s.addText(u ? [{text: main, options: {fontSize: vfs}}, {text: ' ' + u.textContent, options: {fontSize: 12.75, bold: false, fontFace: BF}}] : main,
+        s.addText(u ? [{text: main, options: {fontSize: vfs}}, {text: ' ' + u.textContent, options: {fontSize: 12.75, bold: false, fontFace: BF}}]
+                 : dv ? [{text: main, options: {fontSize: vfs, breakLine: true}}, {text: dv.textContent, options: {fontSize: 8, bold: false, fontFace: BF, color: '333333'}}] : main,
           {x: vb.x, y: b.y, w: vb.w, h: b.h, margin: 0, fontFace: HF, fontSize: vfs, bold: true, color: vc, align: 'center', valign: 'middle'});
         if (i < all.length - 1) s.addShape(pptx.ShapeType.line, {x: b.x, y: b.y + b.h, w: b.w, h: 0, line: {color: GREY, width: 1}});
       });
