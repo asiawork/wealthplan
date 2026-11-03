@@ -6,6 +6,8 @@
 <title>Wealth Plan Portfolio</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
 <script src="backfill.js"></script>
 <style>
 /* Layout: tool controls on top, a fixed 1280x720 "slide" scaled to fit, weights editor beside it. */
@@ -484,6 +486,13 @@ function compute(){
   res.rows = models.map(m => { const s = WP.portfolio(FULL, {[m]:1}, start, end); return {m, w:+raw[m], st: WP.stats(s, MODEL_INFO[m].filter/100)}; });
   res.start = start; res.end = end; res.pf = pf;
   res.years = WP.daysBetween(start, end) / 365.25;
+  { // the max-drawdown episode on the equity curve: peak -> trough -> back to that peak
+    const v = pf.nav; let pk = 0, mi = 0, mpk = 0, worst = 0;
+    for (let i = 0; i < v.length; i++){ if (v[i] >= v[pk]) pk = i; const d = v[i] / v[pk] - 1; if (d < worst){ worst = d; mi = i; mpk = pk; } }
+    let ri = -1; for (let i = mi + 1; i < v.length; i++) if (v[i] >= v[mpk]){ ri = i; break; }
+    res.mdd = {dd: worst, peak: pf.dates[mpk], trough: pf.dates[mi], rec: ri < 0 ? null : pf.dates[ri],
+               days: WP.daysBetween(pf.dates[mpk], ri < 0 ? end : pf.dates[ri]), recovered: ri >= 0};
+  }
   // which models lean on back-filled history inside the window
   res.backfilled = models.filter(m => { const i = DATA.csv.models[m] ? DATA.csv.models[m].findIndex(v => v != null) : -1; return i > 0 && DATA.csv.dates[i] > start; })
                          .map(m => ({m, from: DATA.csv.dates[DATA.csv.models[m].findIndex(v => v != null)]}));
@@ -607,6 +616,11 @@ function renderResult(err){
         <button class="btn ghost" id="pSlide">เม.ย. 2019 – เม.ย. 2026</button>
         <button class="btn ghost" id="pLatest">ถึงข้อมูลล่าสุด</button>
       </div>
+      <div class="range" style="margin-left:auto">
+        <button class="btn" id="pngBtn">บันทึกรูป (PNG)</button>
+        <button class="btn" id="pptBtn">ดาวน์โหลด PowerPoint</button>
+        <span id="exMsg" class="hint" style="margin:0"></span>
+      </div>
     </div>
     <div class="stage">
       <div class="scaler" id="scaler"><div class="slide" id="slide"></div></div>
@@ -619,6 +633,8 @@ function renderResult(err){
   de.onchange = () => { if (de.value){ state.end = de.value; update(); } };
   app.querySelector('#pSlide').onclick = () => { state.start = SLIDE_PERIOD.start; state.end = SLIDE_PERIOD.end; ds.value = state.start; de.value = state.end; update(); };
   app.querySelector('#pLatest').onclick = () => { state.start = SLIDE_PERIOD.start; state.end = lastDate(); ds.value = state.start; de.value = state.end; update(); };
+  app.querySelector('#pngBtn').onclick = exportPNG;
+  app.querySelector('#pptBtn').onclick = exportPPTX;
   update();
   fit();
 }
@@ -640,9 +656,9 @@ const fmtNum = x => (Math.round(x*100)/100).toString();
 function colorsFor(models, raw){
   // largest weight -> blue, the rest in order: grey, navy, light ...
   const big = models.reduce((b,m) => (+raw[m] > +raw[b] ? m : b), models[0]);
-  const rest = ['var(--c2)','var(--c3)','var(--c4)','var(--c5)','var(--c6)','#c8ced9','#8fa0bb'];
+  const rest = ['#a5adbf','#2b4167','#dbe7f7','#7aa5d8','#5b6474','#c8ced9','#8fa0bb'];
   const out = {}; let k = 0;
-  models.forEach(m => { out[m] = m === big ? 'var(--c1)' : rest[k++ % rest.length]; });
+  models.forEach(m => { out[m] = m === big ? '#3b7cc4' : rest[k++ % rest.length]; });
   return out;
 }
 
@@ -774,7 +790,7 @@ function drawEquity(r){
   const series = [{key:'port', name: 'พอร์ต', color:'var(--navy)', w:2.6, v: pf.nav.map(x => x / pf.nav[0] - 1)}];
   if (EQ.models) r.models.forEach(m => {
     const s = WP.portfolio(FULL, {[m]:1}, r.start, r.end), map = new Map(s.dates.map((d,i) => [d, s.nav[i] / s.nav[0] - 1]));
-    series.push({key:m, name:m, color: col[m] === 'var(--c4)' ? '#9bb8de' : col[m], w:1.4, v: pf.dates.map(d => map.get(d) ?? null)});
+    series.push({key:m, name:m, color: col[m] === '#dbe7f7' ? '#9bb8de' : col[m], w:1.4, v: pf.dates.map(d => map.get(d) ?? null)});
   });
   // drawdown (underwater) of the portfolio
   let pk = -Infinity; const dd = pf.nav.map(x => { if (x > pk) pk = x; return x / pk - 1; });
@@ -814,7 +830,7 @@ function drawEquity(r){
     <path d="${path(dd, y2)}L${x(n-1)},${y2(0)}L${x(0)},${y2(0)}Z" fill="rgba(227,25,27,.18)"/>
     <path d="${path(dd, y2)}" fill="none" stroke="var(--neg)" stroke-width="1.4"/>
     <circle cx="${x(mi)}" cy="${y2(dd[mi])}" r="4" fill="var(--neg)"/>
-    <text x="${x(mi) + (mi > n*0.8 ? -8 : 8)}" y="${Math.min(y2(dd[mi]) + 4, H2-padB-4)}" text-anchor="${mi > n*0.8 ? 'end' : 'start'}" font-size="12.5" font-weight="600" fill="var(--neg)">Max ${pct(dd[mi])} (${thDate(pf.dates[mi])})</text>
+    <text x="${x(mi) + (mi > n*0.8 ? -8 : 8)}" y="${Math.min(y2(dd[mi]) + 4, H2-padB-4)}" text-anchor="${mi > n*0.8 ? 'end' : 'start'}" font-size="12.5" font-weight="600" fill="var(--neg)">Max ${pct(dd[mi])} (${thDate(pf.dates[mi])}) · ${r.mdd.recovered ? 'ฟื้นใน ' + recLong(r.mdd.days).v + ' ' + (recLong(r.mdd.days).u === 'months' ? 'เดือน' : 'ปี') : 'ยังไม่ฟื้น'}</text>
     <line id="eqX2" y1="${padT}" y2="${H2-padB}" stroke="#16233a" stroke-dasharray="3 3" visibility="hidden"/>
   </svg>`;
   /* ---- where the median comes from: one mark per counted cycle (entry date) ---- */
@@ -937,15 +953,13 @@ function drawEquity(r){
 
 function noteHTML(r){
   if (!r.port) return '';
-  const parts = [];
-  parts.push(`ช่วงคำนวณ ${thDate(r.start)} – ${thDate(r.end)} · เกณฑ์นับ drawdown ของพอร์ตนี้ ${(r.thr*100).toFixed(3).replace(/0+$/,'').replace(/\.$/,'')}% · จำนวน cycle ${r.port.nCycles.toLocaleString()}`);
-  if (r.backfilled.length){
-    if (BACKFILL) parts.push('ใช้ผลทดสอบย้อนหลังสำหรับ ' + r.backfilled.map(b => `${b.m} ก่อน ${thDate(b.from)}`).join(' และ '));
-  }
-  if (!BACKFILL && r.port){
-    const late = r.rows.map(x => WP.firstDate(FULL, x.m)).sort().pop();
-    if (late > state.start) parts.push(`<span style="color:var(--neg)">ยังไม่มีข้อมูลย้อนหลังของ FIXEDTDP/TCT — พอร์ตเริ่มคำนวณที่ ${thDate(r.start)}</span>`);
-  }
+  const p = r.port, m = r.mdd, thr = (r.thr*100).toFixed(3).replace(/0+$/,'').replace(/\.$/,'');
+  const rl = d => { const x = recLong(d); return x.v + ' ' + (x.u === 'months' ? 'เดือน' : 'ปี'); };
+  const parts = [`ช่วงคำนวณ ${thDate(r.start)} – ${thDate(r.end)}`];
+  parts.push(`<b>Median</b> Drawdown ${pct(p.cycDDMedian)} · Recovery ${rl(p.recMedian)} — คิดจาก ${p.nCycles.toLocaleString()} cycle (วันที่ถ้าเข้าลงทุนแล้วพอร์ตลงเกิน ${thr}% ภายใน 84 วันทำการ)`);
+  if (m && m.dd < 0) parts.push(`<b>Max</b> Drawdown ${pct(m.dd)} — จุดสูงสุด ${thDate(m.peak)} → ต่ำสุด ${thDate(m.trough)} → `
+    + (m.recovered ? `กลับถึงจุดสูงสุดเดิม ${thDate(m.rec)} · <b>Recovery ${rl(m.days)}</b>` : `<b>ยังไม่กลับถึงจุดสูงสุดเดิม</b> (ผ่านมาแล้ว ${rl(m.days)})`));
+  if (r.backfilled.length && BACKFILL) parts.push('ใช้ผลทดสอบย้อนหลังสำหรับ ' + r.backfilled.map(b => `${b.m} ก่อน ${thDate(b.from)}`).join(' และ '));
   return parts.join('<br>');
 }
 
@@ -979,6 +993,127 @@ function renderUpload(err){
   d.ondragover = e => { e.preventDefault(); d.classList.add('over'); };
   d.ondragleave = () => d.classList.remove('over');
   d.ondrop = e => { e.preventDefault(); d.classList.remove('over'); handleFiles([...e.dataTransfer.files]); };
+}
+
+
+/* ================= export: PNG + PPTX of the slide only ================= */
+function exportName(ext){
+  const plan = PLANS.find(p => p.id === state.plan), meta = planMeta(plan);
+  return `${(plan.no ? 'Plan' + plan.no + '_' : '') + meta.name.replace(/[^\w฀-๿]+/g, '_')}_${state.end}.${ext}`;
+}
+function download(href, name){ const a = document.createElement('a'); a.href = href; a.download = name; document.body.appendChild(a); a.click(); a.remove(); }
+function exMsg(s){ const el = document.getElementById('exMsg'); if (el) el.textContent = s; }
+async function exportPNG(){
+  if (!window.htmlToImage){ exMsg('โหลดตัวช่วยบันทึกรูปไม่สำเร็จ (ต้องต่ออินเทอร์เน็ต)'); return; }
+  exMsg('กำลังสร้างรูป…');
+  try{
+    const node = document.getElementById('slide');
+    const url = await htmlToImage.toPng(node, {width:1280, height:720, pixelRatio:2, backgroundColor:'#ffffff', style:{transform:'none'}});
+    download(url, exportName('png')); exMsg('');
+  }catch(e){ exMsg('บันทึกรูปไม่สำเร็จ: ' + (e.message || e)); }
+}
+function hex(c){
+  if (!c) return '000000';
+  if (c.startsWith('var(')) c = getComputedStyle(document.documentElement).getPropertyValue(c.slice(4, -1)).trim();
+  const m = c.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+  if (m) return [m[1], m[2], m[3]].map(x => (+x).toString(16).padStart(2, '0')).join('').toUpperCase();
+  return c.replace('#', '').toUpperCase();
+}
+async function exportPPTX(){
+  if (!window.PptxGenJS){ exMsg('โหลดตัวช่วยสร้าง PowerPoint ไม่สำเร็จ (ต้องต่ออินเทอร์เน็ต)'); return; }
+  const r = compute(); if (!r.port){ exMsg('ยังไม่มีผลลัพธ์ให้บันทึก'); return; }
+  exMsg('กำลังสร้างไฟล์…');
+  try{
+    const slideEl = document.getElementById('slide'), k = slideEl.getBoundingClientRect().width / 1280;
+    const IN = px => px / 96;                       // 1280 px slide = 13.333 in
+    const box = el => { const a = slideEl.getBoundingClientRect(), b = el.getBoundingClientRect();
+      return {x: IN((b.left - a.left) / k), y: IN((b.top - a.top) / k), w: IN(b.width / k), h: IN(b.height / k)}; };
+    const HF = 'BLS Bold', BF = 'BLS Text', NAVY = '16233A', POS = '16A34A', NEG = 'E3191B', GREY = '8B93A3';
+    const pptx = new PptxGenJS(); pptx.layout = 'LAYOUT_WIDE';
+    const s = pptx.addSlide(); s.background = {color: 'FFFFFF'};
+    const plan = PLANS.find(p => p.id === state.plan), meta = planMeta(plan);
+    const col = colorsFor(r.models, r.raw), amt = parseFloat(state.amount) || 0;
+
+    // donut (editable chart) + labels from the on-screen layout
+    const svg = slideEl.querySelector('.s-donut'), sb = box(svg), sx = sb.w / 500;
+    const cx = 250, cy = 210, R = 146, ms = r.models;
+    s.addChart(pptx.ChartType.doughnut, [{name: 'Portfolio', labels: ms, values: ms.map(m => +r.raw[m])}], {
+      x: sb.x + (cx - R) * sx, y: sb.y + (cy - R) * sx, w: 2 * R * sx, h: 2 * R * sx,
+      holeSize: 77, showLegend: false, showValue: false, showPercent: false, showLabel: false, firstSliceAng: 0,
+      chartColors: ms.map(m => hex(col[m])), dataBorder: {pt: 1, color: 'FFFFFF'}, layout: {x: 0, y: 0, w: 1, h: 1}});
+    svg.querySelectorAll('polyline').forEach(pl => {
+      const pts = pl.getAttribute('points').trim().split(/\s+/).map(p => p.split(',').map(Number));
+      const [x1, y1] = pts[0], [x2, y2] = pts[1];
+      s.addShape(pptx.ShapeType.line, {x: sb.x + Math.min(x1, x2) * sx, y: sb.y + Math.min(y1, y2) * sx, w: Math.abs(x2 - x1) * sx, h: Math.abs(y2 - y1) * sx || 0.001,
+        line: {color: '9AA3B2', width: 0.75}, flipH: (x2 < x1) !== (y2 < y1)});
+    });
+    svg.querySelectorAll('text').forEach(tx => {
+      const b = box(tx), anchor = tx.getAttribute('text-anchor'), fs = +tx.getAttribute('font-size');
+      const w = Math.max(b.w + 0.3, 1.4), x = anchor === 'end' ? b.x + b.w - w : anchor === 'middle' ? b.x + b.w / 2 - w / 2 : b.x;
+      s.addText(tx.textContent, {x, y: b.y - 0.02, w, h: b.h + 0.04, margin: 0, fontFace: fs >= 22 ? HF : BF, fontSize: fs * 0.75, bold: +tx.getAttribute('font-weight') >= 600,
+        color: hex(tx.getAttribute('fill')), align: anchor === 'end' ? 'right' : anchor === 'middle' ? 'center' : 'left', valign: 'middle'});
+    });
+    // legend
+    slideEl.querySelectorAll('.s-legend span').forEach(sp => {
+      const i = sp.querySelector('i'), bi = box(i), bs = box(sp);
+      s.addShape(pptx.ShapeType.rect, {x: bi.x, y: bi.y, w: bi.w, h: bi.h, fill: {color: hex(i.style.background)}, line: {type: 'none'}});
+      s.addText(sp.textContent.trim(), {x: bi.x + bi.w + 0.04, y: bs.y, w: bs.w, h: bs.h, margin: 0, fontFace: HF, fontSize: 11.25, bold: true, color: NAVY, valign: 'middle'});
+    });
+    // title block
+    const tb = box(slideEl.querySelector('.s-title'));
+    s.addShape(pptx.ShapeType.rect, {x: tb.x, y: tb.y, w: tb.w, h: tb.h, fill: {color: NAVY}, line: {type: 'none'}});
+    s.addText([{text: meta.name, options: {fontFace: HF, fontSize: 30, bold: true, breakLine: true}},
+               {text: `- Risk Profile: ${meta.risk} -`, options: {fontFace: BF, fontSize: 12, color: 'DFE5EF'}}],
+      {x: tb.x, y: tb.y, w: tb.w, h: tb.h, align: 'center', valign: 'middle', color: 'FFFFFF', margin: 0});
+    // table
+    const tbl = slideEl.querySelector('.tbl'), tbB = box(tbl);
+    const hdr = {fill: {color: NAVY}, color: 'FFFFFF', bold: true, fontFace: HF, align: 'center', valign: 'middle', fontSize: 12, border: {type: 'none'}};
+    const thin = {type: 'solid', pt: 1, color: GREY}, none = {type: 'none'}, thick = {type: 'solid', pt: 3, color: NAVY};
+    const rows = [[{text: 'Strategy', options: {...hdr, rowspan: 2}}, {text: 'Portfolio Model', options: {...hdr, rowspan: 2}},
+                   {text: tbl.tHead.rows[0].cells[2].textContent.trim(), options: {...hdr, colspan: 4}}],
+                  [...tbl.tHead.rows[1].cells].map(c => ({text: c.innerText.trim(), options: {...hdr, fontSize: 11}}))];
+    const body = [...tbl.tBodies[0].rows];
+    body.forEach((tr, ri) => {
+      const last = ri === body.length - 1, row = [];
+      [...tr.cells].forEach(td => {
+        const span = +td.getAttribute('rowspan') || 1, endsLast = ri + span - 1 === body.length - 1;
+        const base = {fontFace: BF, fontSize: 12, align: 'center', valign: 'middle', color: NAVY,
+          border: [none, none, endsLast ? thick : thin, none]};
+        if (td.classList.contains('strat')) row.push({text: td.innerText.trim(), options: {...base, fontSize: 11, rowspan: span}});
+        else if (td.classList.contains('model')) row.push({text: [{text: '● ', options: {color: hex(td.querySelector('i').style.background), fontSize: 14}},
+                                                                     {text: td.textContent.trim(), options: {bold: true, fontFace: HF}}], options: {...base, align: 'left'}});
+        else row.push({text: td.textContent.trim(), options: {...base, color: td.classList.contains('pos') ? POS : td.classList.contains('neg') ? NEG : NAVY}});
+      });
+      rows.push(row);
+    });
+    const colW = [...tbl.tHead.rows[0].cells].slice(0, 2).map(c => box(c).w).concat([...tbl.tHead.rows[1].cells].map(c => box(c).w));
+    const rowH = [...tbl.tHead.rows].map(tr => box(tr).h).concat(body.map(tr => box(tr).h));
+    s.addTable(rows, {x: tbB.x, y: tbB.y, w: tbB.w, colW, rowH, margin: 0.03, autoPage: false});
+    // four boxes
+    slideEl.querySelectorAll('.box').forEach(bx => {
+      const h4 = box(bx.querySelector('h4')), bb = box(bx);
+      s.addShape(pptx.ShapeType.rect, {x: h4.x, y: h4.y, w: h4.w, h: h4.h, fill: {color: NAVY}, line: {type: 'none'}});
+      s.addText(bx.querySelector('h4').textContent.trim(), {x: h4.x, y: h4.y, w: h4.w, h: h4.h, margin: 0, fontFace: HF, fontSize: 13.5, bold: true, color: 'FFFFFF', align: 'center', valign: 'middle'});
+      bx.querySelectorAll('.brow').forEach((rw, i, all) => {
+        const b = box(rw), kEl = rw.querySelector('.k'), vEl = rw.querySelector('.v'), kb = box(kEl), vb = box(vEl);
+        s.addText(kEl.innerText.trim(), {x: kb.x, y: b.y, w: kb.w, h: b.h, margin: 0, fontFace: BF, fontSize: +getComputedStyle(kEl).fontSize.replace('px', '') * 0.75, color: NAVY, align: 'center', valign: 'middle'});
+        const u = vEl.querySelector('.u'), main = u ? vEl.firstChild.textContent : vEl.textContent;
+        const vc = vEl.classList.contains('pos') ? POS : vEl.classList.contains('neg') ? NEG : NAVY, vfs = +getComputedStyle(vEl).fontSize.replace('px', '') * 0.75;
+        s.addText(u ? [{text: main, options: {fontSize: vfs}}, {text: ' ' + u.textContent, options: {fontSize: 12.75, bold: false, fontFace: BF}}] : main,
+          {x: vb.x, y: b.y, w: vb.w, h: b.h, margin: 0, fontFace: HF, fontSize: vfs, bold: true, color: vc, align: 'center', valign: 'middle'});
+        if (i < all.length - 1) s.addShape(pptx.ShapeType.line, {x: b.x, y: b.y + b.h, w: b.w, h: 0, line: {color: GREY, width: 1}});
+      });
+      s.addShape(pptx.ShapeType.rect, {x: bb.x, y: bb.y + bb.h - IN(4), w: bb.w, h: IN(4), fill: {color: NAVY}, line: {type: 'none'}});
+    });
+    // table bottom bar
+    s.addShape(pptx.ShapeType.rect, {x: tbB.x, y: tbB.y + tbB.h, w: tbB.w, h: IN(4), fill: {color: NAVY}, line: {type: 'none'}});
+    // footnote
+    const ft = slideEl.querySelector('.foot'), fb = box(ft), lines = ft.innerText.split('\n');
+    s.addText(lines.map((l, i) => ({text: l, options: {breakLine: i < lines.length - 1}})),
+      {x: fb.x - 0.2, y: fb.y, w: fb.w + 0.2, h: fb.h, margin: 0, fontFace: BF, fontSize: 8, color: '333333', align: 'right', valign: 'middle'});
+    await pptx.writeFile({fileName: exportName('pptx')});
+    exMsg('');
+  }catch(e){ console.error(e); exMsg('สร้าง PowerPoint ไม่สำเร็จ: ' + (e.message || e)); }
 }
 
 /* scale the 1280x720 slide to the available width */
