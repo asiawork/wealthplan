@@ -142,7 +142,10 @@ button,input,select{font-family:inherit;font-size:inherit;color:inherit}
 .tbl td.strat{font-size:15.5px;font-weight:500;line-height:1.35;width:120px}
 .tbl td.model{text-align:left;font-weight:600;white-space:nowrap}
 .tbl td.model i{display:inline-block;width:17px;height:17px;border-radius:50%;vertical-align:-2px;margin-right:10px}
-.tbl tbody tr:last-child td{border-bottom:4px solid var(--navy)}
+.tbl tbody tr:last-child td{border-bottom:0}
+.s-table::after{content:'';display:block;height:4px;background:var(--navy)}
+.tbl td.strat.end{border-bottom:0}
+.tbl td.strat{border-bottom-color:#8b93a3}
 .tbl.compact td{padding:6px 6px;font-size:16px}
 .pos{color:var(--pos)} .neg{color:var(--neg)}
 .boxes{position:absolute;left:34px;right:34px;top:494px;display:grid;grid-template-columns:repeat(4,1fr);gap:20px}
@@ -658,7 +661,7 @@ function slideHTML(plan, r){
     const s = MODEL_INFO[row.m].strategy, prev = i ? MODEL_INFO[r.rows[i-1].m].strategy : null;
     let span = 0; if (s !== prev){ span = 1; while (i+span < r.rows.length && MODEL_INFO[r.rows[i+span].m].strategy === s) span++; }
     return `<tr>
-      ${span ? `<td class="strat" rowspan="${span}">${esc(s).replace(' With', '<br>With').replace('Max ', 'Max<br>').replace('Stabilizer', '<br>Stabilizer').replace(/^Core <br>/, 'Core<br>').replace('Engine','<br>Engine').replace('Growth <br>','Growth<br>')}</td>` : ''}
+      ${span ? `<td class="strat${i + span === r.rows.length ? ' end' : ''}" rowspan="${span}">${esc(s).replace(' With', '<br>With').replace('Max ', 'Max<br>').replace('Stabilizer', '<br>Stabilizer').replace(/^Core <br>/, 'Core<br>').replace('Engine','<br>Engine').replace('Growth <br>','Growth<br>')}</td>` : ''}
       <td class="model"><i style="background:${col[row.m]}"></i>${row.m}</td>
       <td class="${cls(row.st.total)}">${pct(row.st.total)}</td>
       <td class="${cls(row.st.rollAvg)}">${pct(row.st.rollAvg)}</td>
@@ -746,7 +749,7 @@ function donut(models, raw, col){
 
 
 /* make the model table reach down to just above the bottom boxes */
-const TABLE_BOTTOM = 470;
+const TABLE_BOTTOM = 466;
 function stretchTable(){
   const st = document.querySelector('#slide .s-table'); if (!st) return;
   const tbl = st.querySelector('.tbl'), rows = [...tbl.tBodies[0].rows];
