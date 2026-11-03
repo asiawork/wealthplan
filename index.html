@@ -407,7 +407,7 @@ const PLANS = [
   {id:'p5', no:5, name:'Alpha Multiplier', risk:'Aggressive', w:{AAA:50, TCT:50}},
   {id:'diy', no:null, name:'Wealth Solution Plan', risk:'', w:{}},
 ];
-const MIN_PLAN = 5;                  // ล้านบาท: ขั้นต่ำของแผน 1–5
+const MIN_PLAN = 5;                  // ล้านบาท: เงินลงทุนขั้นต่ำทุกแผน รวม DIY
 const MIN_PER_MODEL = 0.5;            // ล้านบาท: ขั้นต่ำต่อโมเดล (500,000 บาท)
 const DIV_YIELD = {DAA: 0.031};      // เงินปันผลต่อปี บวกแบบไม่ทบต้น (ตามสไลด์เดิม)
 const RISK_LEVELS = ['Conservative','Conservative to Moderate','Moderate','Moderate to Aggressive','Aggressive'];
@@ -532,12 +532,12 @@ function inputValid(){
   const raw = state.weights[state.plan], sum = MODEL_ORDER.reduce((a,m) => a + (+raw[m] || 0), 0);
   const errs = [];
   if (!(amt > 0)) errs.push('กรอกจำนวนเงินลงทุน');
-  else if (state.plan !== 'diy' && amt < MIN_PLAN) errs.push(`แผน 1–5 ลงทุนขั้นต่ำ ${MIN_PLAN} ล้านบาท (ตอนนี้ ${fmtMoney(amt)} ล้านบาท) หรือเลือก DIY เพื่อจัดพอร์ตเอง`);
+  else if (amt < MIN_PLAN) errs.push(`เงินลงทุนขั้นต่ำ ${MIN_PLAN} ล้านบาท (ตอนนี้ ${fmtMoney(amt)} ล้านบาท)`);
   if (state.plan === 'diy'){
     if (!state.meta.diy.risk) errs.push('เลือก Risk Level');
     if (Math.abs(sum - 100) > 1e-6) errs.push(`สัดส่วนรวมต้องเท่ากับ 100% (ตอนนี้ ${fmtNum(sum)}%)`);
     const low = lowModels();
-    if (amt > 0 && low.length){
+    if (amt >= MIN_PLAN && low.length){
       const minW = Math.min(...low.map(m => +raw[m]));
       errs.push(`${low.map(m => `${m} ${fmtMoney(amt * raw[m] / 100)} ลบ.`).join(', ')} ต่ำกว่าขั้นต่ำ 5 แสนบาทต่อโมเดล — `
         + `เพิ่มเงินลงทุนเป็นอย่างน้อย ${fmtMoney(Math.ceil(MIN_PER_MODEL / (minW / 100) * 2) / 2)} ล้านบาท หรือปรับสัดส่วนแต่ละตัวให้ได้อย่างน้อย ${fmtNum(Math.ceil(MIN_PER_MODEL / amt * 10000) / 100)}%`);
@@ -565,7 +565,7 @@ function renderInput(err){
               <span class="pno">${p.no ? 'แผน ' + p.no : 'DIY'}</span>
               <span class="pname">${esc(p.name)}</span>
               <span class="prisk">${p.no ? esc(p.risk) : 'จัดสัดส่วนเองตามความต้องการของลูกค้า'}</span>
-              <span class="pmin">${p.no ? `ขั้นต่ำ ${MIN_PLAN} ล้านบาท` : 'ขั้นต่ำ 5 แสนบาทต่อโมเดล'}</span>
+              <span class="pmin">${p.no ? `ขั้นต่ำ ${MIN_PLAN} ล้านบาท` : `ขั้นต่ำ ${MIN_PLAN} ล้านบาท · 5 แสนบาทต่อโมเดล`}</span>
               ${p.no ? `<span class="pmix">${ms.map(m => `${m} ${p.w[m]}%`).join(' · ')}</span>` : ''}
             </button>`; }).join('')}
         </div>
