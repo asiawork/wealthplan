@@ -54,6 +54,22 @@ button,input,select{font-family:inherit;font-size:inherit;color:inherit}
 .stage{min-width:0}
 .scaler{width:100%;overflow:hidden;border-radius:6px;box-shadow:0 2px 14px rgba(22,35,58,.12);background:#fff}
 .slide{width:1280px;height:720px;transform-origin:0 0;position:relative;background:var(--paper);font-family:var(--head);color:var(--ink)}
+.eq{background:#fff;border:1px solid var(--line);border-radius:10px;padding:16px 18px 12px;margin-top:14px}
+.eq-head{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:baseline;justify-content:space-between;margin-bottom:6px}
+.eq-head h3{font-family:var(--head);font-size:17px;margin:0;color:var(--navy)}
+.eq-ctl{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;font-size:13px;color:var(--muted)}
+.eq-ctl label{display:inline-flex;gap:6px;align-items:center;cursor:pointer}
+.eq-ctl input{accent-color:var(--navy)}
+.eq-legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12.5px;color:var(--ink);margin:2px 0 6px}
+.eq-legend span{display:inline-flex;align-items:center;gap:6px}
+.eq-legend i{display:inline-block;width:18px;height:0;border-top:2.5px solid}
+.eq-legend i.thin{border-top-width:1.5px}
+.eq-legend i.box{width:14px;height:10px;border:0}
+.eq-wrap{position:relative}
+.eq svg{display:block;width:100%;height:auto;overflow:visible}
+.eq-sub{font-family:var(--head);font-size:13px;color:var(--navy);font-weight:600;margin:10px 0 2px}
+.eq-tip{position:absolute;pointer-events:none;background:var(--navy);color:#fff;border-radius:6px;padding:6px 9px;font-size:12px;line-height:1.5;white-space:nowrap;transform:translate(-50%,-100%);font-variant-numeric:tabular-nums}
+.eq-tip[hidden]{display:none}
 .hint{font-size:12.5px;color:var(--muted);margin-top:8px;line-height:1.6}
 
 /* weights panel */
@@ -434,7 +450,7 @@ function compute(){
   res.thr = thr;
   res.port = WP.stats(pf, thr);
   res.rows = models.map(m => { const s = WP.portfolio(FULL, {[m]:1}, start, end); return {m, w:+raw[m], st: WP.stats(s, MODEL_INFO[m].filter/100)}; });
-  res.start = start; res.end = end;
+  res.start = start; res.end = end; res.pf = pf;
   res.years = WP.daysBetween(start, end) / 365.25;
   // which models lean on back-filled history inside the window
   res.backfilled = models.filter(m => { const i = DATA.csv.models[m] ? DATA.csv.models[m].findIndex(v => v != null) : -1; return i > 0 && DATA.csv.dates[i] > start; })
@@ -470,6 +486,7 @@ function render(err=''){
       <div class="stage">
         <div class="scaler" id="scaler"><div class="slide" id="slide"></div></div>
         <div class="hint" id="note"></div>
+        <section class="eq" id="eq" aria-label="Equity curve"></section>
       </div>
       <div class="panel" id="panel"></div>
     </div>`;
@@ -490,6 +507,7 @@ function update(){
   document.getElementById('slide').innerHTML = slideHTML(plan, r);
   document.getElementById('note').innerHTML = noteHTML(r);
   stretchTable();
+  drawEquity(r);
   const sumEl = document.getElementById('sum');
   if (sumEl){ sumEl.className = 'sum ' + (Math.abs(r.sum-100) < 1e-6 ? 'good' : 'bad'); sumEl.lastElementChild.textContent = fmtNum(r.sum) + '%'; }
   const thrEl = document.getElementById('thr');
@@ -619,6 +637,95 @@ function stretchTable(){
   const natural = rows.reduce((a, tr) => a + tr.offsetHeight, 0);
   const avail = TABLE_BOTTOM - used;
   if (avail > natural) rows.forEach(tr => tr.style.height = (avail / rows.length) + 'px');
+}
+
+
+/* ================= equity curve + drawdown ================= */
+const EQ = {models:false};
+function niceStep(range, n){ const raw = range / n, p = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / p; return (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * p; }
+function drawEquity(r){
+  const box = document.getElementById('eq'); if (!box) return;
+  if (!r.port || !r.pf){ box.hidden = true; return; }
+  box.hidden = false;
+  const pf = r.pf, n = pf.dates.length;
+  const col = colorsFor(r.models, r.raw);
+  // per-model series on the portfolio's dates, rebased at start
+  const series = [{key:'port', name: 'พอร์ต', color:'var(--navy)', w:2.6, v: pf.nav.map(x => x / pf.nav[0] - 1)}];
+  if (EQ.models) r.models.forEach(m => {
+    const s = WP.portfolio(FULL, {[m]:1}, r.start, r.end), map = new Map(s.dates.map((d,i) => [d, s.nav[i] / s.nav[0] - 1]));
+    series.push({key:m, name:m, color: col[m] === 'var(--c4)' ? '#9bb8de' : col[m], w:1.4, v: pf.dates.map(d => map.get(d) ?? null)});
+  });
+  // drawdown (underwater) of the portfolio
+  let pk = -Infinity; const dd = pf.nav.map(x => { if (x > pk) pk = x; return x / pk - 1; });
+  let mi = 0; dd.forEach((x,i) => { if (x < dd[mi]) mi = i; });
+  let pi = mi; while (pi > 0 && dd[pi] < 0) pi--;
+  // back-filled stretch (latest inception among used models that lean on backfill)
+  const bfEnd = r.backfilled.length ? r.backfilled.map(b => b.from).sort().pop() : null;
+
+  const W = 1100, padL = 56, padR = 18, H1 = 300, H2 = 150, padT = 12, padB = 26;
+  const x = i => padL + (W - padL - padR) * i / (n - 1);
+  const all = series.flatMap(s => s.v).filter(v => v != null);
+  let lo = Math.min(0, ...all), hi = Math.max(0, ...all);
+  const st = niceStep(hi - lo || 0.01, 5); lo = Math.floor(lo / st) * st; hi = Math.ceil(hi / st) * st;
+  const y1 = v => padT + (H1 - padT - padB) * (hi - v) / (hi - lo);
+  const ddLo0 = Math.min(...dd), st2 = niceStep(-ddLo0 || 0.001, 3), ddLo = Math.floor(ddLo0 / st2) * st2 || -st2;
+  const y2 = v => padT + (H2 - padT - padB) * (0 - v) / (0 - ddLo);
+  const pctTick = (v, s) => { const d = s * 100 < 1 ? (s * 100 < 0.1 ? 2 : 1) : 0; return (v > 0 ? '+' : '') + (v * 100).toFixed(d) + '%'; };
+  const years = []; let lastY = null; pf.dates.forEach((d,i) => { const yy = d.slice(0,4); if (yy !== lastY){ if (lastY && d.slice(5,7) === '01') years.push({i, yy}); lastY = yy; } });
+  const grid = (H, yf, ticks, s) => ticks.map(v => `<line x1="${padL}" x2="${W-padR}" y1="${yf(v)}" y2="${yf(v)}" stroke="${Math.abs(v) < 1e-12 ? '#8b93a3' : '#e6e9ef'}" stroke-width="1"/><text x="${padL-8}" y="${yf(v)+4}" text-anchor="end" font-size="11.5" fill="#6a7488">${pctTick(v, s)}</text>`).join('')
+    + years.map(o => `<line x1="${x(o.i)}" x2="${x(o.i)}" y1="${padT}" y2="${H-padB}" stroke="#eef0f4"/><text x="${x(o.i)}" y="${H-8}" text-anchor="middle" font-size="11.5" fill="#6a7488">${o.yy}</text>`).join('');
+  const ticks = (a, b, s) => { const o = []; for (let v = a; v <= b + 1e-12; v += s) o.push(+v.toFixed(10)); return o; };
+  const path = (v, yf) => { let s = '', pen = false; v.forEach((val,i) => { if (val == null){ pen = false; return; } s += (pen ? 'L' : 'M') + x(i).toFixed(1) + ',' + yf(val).toFixed(1); pen = true; }); return s; };
+  const bfI = bfEnd ? pf.dates.findIndex(d => d >= bfEnd) : -1;
+  const bfRect = (H, label) => bfI > 0 ? `<rect x="${padL}" y="${padT}" width="${x(bfI)-padL}" height="${H-padT-padB}" fill="#f2f4f8"/>${label ? `<text x="${padL+8}" y="${padT+14}" font-size="11" fill="#8b93a3">ช่วงใช้ผลทดสอบย้อนหลัง</text>` : ''}` : '';
+  const mddBand = `<rect x="${x(pi)}" y="${padT}" width="${Math.max(1, x(mi)-x(pi))}" height="${H2-padT-padB}" fill="rgba(227,25,27,.08)"/>`;
+
+  const svg1 = `<svg viewBox="0 0 ${W} ${H1}" id="eqSvg" role="img" aria-label="ผลตอบแทนสะสม">
+    ${bfRect(H1, true)}${grid(H1, y1, ticks(lo, hi, st), st)}
+    ${series.slice(1).map(s => `<path d="${path(s.v, y1)}" fill="none" stroke="${s.color}" stroke-width="${s.w}" stroke-linejoin="round" opacity=".9"/>`).join('')}
+    <path d="${path(series[0].v, y1)}" fill="none" stroke="var(--navy)" stroke-width="2.6" stroke-linejoin="round"/>
+    <circle cx="${x(n-1)}" cy="${y1(series[0].v[n-1])}" r="4" fill="var(--navy)"/>
+    <text x="${x(n-1)-8}" y="${y1(series[0].v[n-1])-10}" text-anchor="end" font-size="13" font-weight="600" fill="var(--navy)">${pct(series[0].v[n-1])}</text>
+    <line id="eqX1" y1="${padT}" y2="${H1-padB}" stroke="#16233a" stroke-dasharray="3 3" visibility="hidden"/>
+  </svg>`;
+  const svg2 = `<svg viewBox="0 0 ${W} ${H2}" id="ddSvg" role="img" aria-label="Drawdown">
+    ${bfRect(H2, false)}${mddBand}${grid(H2, y2, ticks(ddLo, 0, st2), st2)}
+    <path d="${path(dd, y2)}L${x(n-1)},${y2(0)}L${x(0)},${y2(0)}Z" fill="rgba(227,25,27,.18)"/>
+    <path d="${path(dd, y2)}" fill="none" stroke="var(--neg)" stroke-width="1.4"/>
+    <circle cx="${x(mi)}" cy="${y2(dd[mi])}" r="4" fill="var(--neg)"/>
+    <text x="${x(mi) + (mi > n*0.8 ? -8 : 8)}" y="${Math.min(y2(dd[mi]) + 4, H2-padB-4)}" text-anchor="${mi > n*0.8 ? 'end' : 'start'}" font-size="12.5" font-weight="600" fill="var(--neg)">Max ${pct(dd[mi])} (${thDate(pf.dates[mi])})</text>
+    <line id="eqX2" y1="${padT}" y2="${H2-padB}" stroke="#16233a" stroke-dasharray="3 3" visibility="hidden"/>
+  </svg>`;
+  box.innerHTML = `
+    <div class="eq-head"><h3>Equity Curve</h3>
+      <div class="eq-ctl"><label><input type="checkbox" id="eqModels" ${EQ.models ? 'checked' : ''}> แสดงแต่ละโมเดล</label>
+      <span>${thDate(r.start)} – ${thDate(r.end)}</span></div></div>
+    <div class="eq-legend">
+      <span><i style="border-color:var(--navy)"></i>พอร์ต (ปรับสัดส่วนทุกวัน)</span>
+      ${series.slice(1).map(s => `<span><i class="thin" style="border-color:${s.color}"></i>${s.name}</span>`).join('')}
+      ${bfI > 0 ? `<span><i class="box" style="background:#e9ecf2"></i>ช่วงใช้ผลทดสอบย้อนหลัง</span>` : ''}
+    </div>
+    <div class="eq-wrap" id="eqWrap">${svg1}
+      <div class="eq-sub">Drawdown จากจุดสูงสุด <span style="font-weight:400;color:var(--muted);font-size:12px">· แถบแดงอ่อน = ช่วงลงจนถึงจุด Max Drawdown</span></div>
+      ${svg2}
+      <div class="eq-tip" id="eqTip" hidden></div></div>`;
+  box.querySelector('#eqModels').onchange = e => { EQ.models = e.target.checked; drawEquity(r); };
+  // hover
+  const wrap = box.querySelector('#eqWrap'), tip = box.querySelector('#eqTip');
+  const s1 = box.querySelector('#eqSvg'), s2 = box.querySelector('#ddSvg'), l1 = box.querySelector('#eqX1'), l2 = box.querySelector('#eqX2');
+  const move = ev => {
+    const rc = s1.getBoundingClientRect(), k = rc.width / W;
+    const px = (ev.clientX - rc.left) / k; if (px < padL || px > W - padR){ hide(); return; }
+    const i = Math.round((px - padL) / (W - padL - padR) * (n - 1));
+    [l1, l2].forEach(l => { l.setAttribute('x1', x(i)); l.setAttribute('x2', x(i)); l.setAttribute('visibility', 'visible'); });
+    const wr = wrap.getBoundingClientRect();
+    tip.hidden = false;
+    tip.innerHTML = `<b>${thDate(pf.dates[i])}</b><br>` + series.map(s => `${s.name}: ${pct(s.v[i])}`).join('<br>') + `<br>Drawdown: ${pct(dd[i], {dp: Math.abs(dd[i]) < 0.001 ? 2 : 1})}`;
+    tip.style.left = Math.min(Math.max(rc.left - wr.left + x(i) * k, 70), wr.width - 70) + 'px';
+    tip.style.top = (rc.top - wr.top + y1(series[0].v[i]) * k - 10) + 'px';
+  };
+  const hide = () => { tip.hidden = true; [l1, l2].forEach(l => l.setAttribute('visibility', 'hidden')); };
+  [s1, s2].forEach(s => { s.addEventListener('mousemove', move); s.addEventListener('mouseleave', hide); });
 }
 
 function noteHTML(r){
