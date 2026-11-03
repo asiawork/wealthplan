@@ -88,7 +88,11 @@ button,input,select{font-family:inherit;font-size:inherit;color:inherit}
 .plan .pname{font-family:var(--head);font-weight:700;font-size:16px;color:var(--navy);line-height:1.2}
 .plan .prisk{font-size:12.5px;color:var(--muted)}
 .plan .pmin{font-size:11.5px;font-weight:600;color:var(--accent);margin-top:2px}
-.plan .pmix{font-size:12px;color:var(--ink);margin-top:4px;line-height:1.5}
+.plan .pmix{display:grid;grid-template-columns:auto auto;justify-content:start;gap:1px 10px;font-size:12.5px;color:var(--ink);margin-top:6px;line-height:1.45;font-variant-numeric:tabular-nums}
+.plan .pmix b{font-weight:600}
+.plan .pmix span{text-align:right}
+.from{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:12px 0 4px;font-size:13px;color:var(--muted)}
+.from .btn{padding:5px 11px;font-size:13px}
 .field select{border:1px solid var(--line);border-radius:7px;padding:7px 8px;color:var(--ink);font-size:14px;background:#fff}
 .groups{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:4px 24px}
 .drow .amt{grid-column:1/-1;font-size:12px;color:var(--muted);text-align:right;margin-top:-4px}
@@ -425,7 +429,7 @@ const state = {
   meta: {diy:{name:'Wealth Solution Plan', risk:''}},
   view:'input',
   start:null, end:null,
-  amount:'',
+  amount:'10',
 };
 
 /* ================= storage ================= */
@@ -545,6 +549,11 @@ function inputValid(){
   }
   return errs;
 }
+function loadFrom(id){
+  const p = PLANS.find(x => x.id === id && x.no);
+  state.weights.diy = p ? {...p.w} : {};
+  if (p && !state.meta.diy.risk) state.meta.diy.risk = RISK_LEVELS.find(r => p.risk.startsWith(r) && (p.risk === r || r === 'Moderate')) || '';
+}
 function renderInput(err){
   const isDiy = state.plan === 'diy';
   const raw = state.weights.diy;
@@ -565,8 +574,8 @@ function renderInput(err){
               <span class="pno">${p.no ? 'แผน ' + p.no : 'DIY'}</span>
               <span class="pname">${esc(p.name)}</span>
               <span class="prisk">${p.no ? esc(p.risk) : 'จัดสัดส่วนเองตามความต้องการของลูกค้า'}</span>
-              <span class="pmin">${p.no ? `ขั้นต่ำ ${MIN_PLAN} ล้านบาท` : `ขั้นต่ำ ${MIN_PLAN} ล้านบาท · 5 แสนบาทต่อโมเดล`}</span>
-              ${p.no ? `<span class="pmix">${ms.map(m => `${m} ${p.w[m]}%`).join(' · ')}</span>` : ''}
+              <span class="pmin">${p.no ? `ขั้นต่ำ ${MIN_PLAN} ล้านบาท` : `ขั้นต่ำ ${MIN_PLAN} ล้านบาท<br>และ 5 แสนบาทต่อโมเดล`}</span>
+              ${p.no ? `<span class="pmix">${ms.map(m => `<b>${m}</b><span>${p.w[m]}%</span>`).join('')}</span>` : ''}
             </button>`; }).join('')}
         </div>
       </section>
@@ -579,6 +588,9 @@ function renderInput(err){
             <option value="" ${!state.meta.diy.risk ? 'selected' : ''} disabled>เลือก Risk Level</option>
             ${RISK_LEVELS.map(r => `<option ${r === state.meta.diy.risk ? 'selected' : ''}>${r}</option>`).join('')}
           </select></label>
+        <div class="from">เริ่มจากสัดส่วนของแผน
+          ${PLANS.filter(p => p.no).map(p => `<button class="btn ghost" data-from="${p.id}" title="${esc(p.name)}">แผน ${p.no}</button>`).join('')}
+          <button class="btn ghost" data-from="">ล้างทั้งหมด</button></div>
         <div class="sub" style="margin:10px 0 2px">ใส่ % ของโมเดลที่ต้องการ ช่องที่เว้นว่างจะไม่นับ · แต่ละโมเดลต้องมีเงินลงทุนอย่างน้อย 5 แสนบาท</div>
         <div class="groups">
           ${GROUPS.map(g => `<div><div class="grp">${g.label}</div>` + g.models.filter(m => DATA.csv.models[m]).map(m => `
@@ -609,7 +621,13 @@ function renderInput(err){
     }
   };
   app.querySelector('#amt').oninput = e => { state.amount = e.target.value; refresh(); };
-  app.querySelectorAll('[data-plan]').forEach(b => b.onclick = () => { state.plan = b.dataset.plan; renderInput(); });
+  app.querySelectorAll('[data-plan]').forEach(b => b.onclick = () => {
+    const prev = state.plan; state.plan = b.dataset.plan;
+    // switching to DIY with nothing entered yet: start from the plan that was selected
+    if (state.plan === 'diy' && prev !== 'diy' && !Object.keys(state.weights.diy).length) loadFrom(prev);
+    renderInput();
+  });
+  app.querySelectorAll('[data-from]').forEach(b => b.onclick = () => { loadFrom(b.dataset.from); renderInput(); });
   if (isDiy){
     app.querySelector('#risk').onchange = e => { state.meta.diy.risk = e.target.value; refresh(); };
     app.querySelectorAll('input[data-m]').forEach(inp => inp.oninput = () => {
