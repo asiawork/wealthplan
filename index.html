@@ -70,6 +70,32 @@ button,input,select{font-family:inherit;font-size:inherit;color:inherit}
 .eq-sub{font-family:var(--head);font-size:13px;color:var(--navy);font-weight:600;margin:10px 0 2px}
 .eq-tip{position:absolute;pointer-events:none;background:var(--navy);color:#fff;border-radius:6px;padding:6px 9px;font-size:12px;line-height:1.5;white-space:nowrap;transform:translate(-50%,-100%);font-variant-numeric:tabular-nums}
 .eq-tip[hidden]{display:none}
+.form{display:grid;gap:16px;max-width:1100px}
+.step{background:#fff;border:1px solid var(--line);border-radius:12px;padding:18px 20px}
+.step-h{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.step-h h2{font-family:var(--head);font-size:18px;margin:0;color:var(--navy)}
+.num{width:26px;height:26px;border-radius:50%;background:var(--navy);color:#fff;display:inline-grid;place-items:center;font-weight:600;font-size:14px;flex:0 0 auto}
+.money{display:inline-flex;align-items:center;gap:10px;font-size:16px;color:var(--muted)}
+.money input{font-family:var(--head);font-size:28px;font-weight:600;width:220px;max-width:60vw;text-align:right;border:1.5px solid var(--line);border-radius:10px;padding:8px 12px;color:var(--ink);font-variant-numeric:tabular-nums}
+.plans{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
+.plan{display:flex;flex-direction:column;align-items:flex-start;gap:3px;text-align:left;background:#fff;border:1.5px solid var(--line);border-radius:10px;padding:12px 14px;cursor:pointer;min-width:0}
+.plan:hover{border-color:#9aa6bb}
+.plan[aria-checked="true"]{border-color:var(--navy);box-shadow:inset 0 0 0 1.5px var(--navy);background:#f6f8fb}
+.plan .pno{font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.3px}
+.plan[aria-checked="true"] .pno{color:var(--accent)}
+.plan .pname{font-family:var(--head);font-weight:700;font-size:16px;color:var(--navy);line-height:1.2}
+.plan .prisk{font-size:12.5px;color:var(--muted)}
+.plan .pmix{font-size:12px;color:var(--ink);margin-top:4px;line-height:1.5}
+.field select{border:1px solid var(--line);border-radius:7px;padding:7px 8px;color:var(--ink);font-size:14px;background:#fff}
+.groups{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:4px 24px}
+.drow .amt{grid-column:1/-1;font-size:12px;color:var(--muted);text-align:right;margin-top:-4px}
+.drow .amt:empty{display:none}
+.go{display:flex;flex-wrap:wrap;align-items:center;gap:12px}
+.btn.big{font-size:16px;padding:11px 26px;border-radius:10px}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.summary{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:baseline;color:var(--muted);font-size:13.5px}
+.summary b{font-family:var(--head);color:var(--navy);font-size:16px}
+.summary span+span::before{content:'·';margin-right:14px;color:#b5bcc8}
 .hint{font-size:12.5px;color:var(--muted);margin-top:8px;line-height:1.6}
 
 /* weights panel */
@@ -368,8 +394,9 @@ const PLANS = [
   {id:'p3', no:3, name:'Hub of Yield Growth', risk:'Moderate With Yield', w:{FIXEDTDP:40, DAA:50, TCT:10}},
   {id:'p4', no:4, name:'Steady Wealth Builder', risk:'Moderate', w:{FIXEDSP:20, MAA:50, TCT:30}},
   {id:'p5', no:5, name:'Alpha Multiplier', risk:'Aggressive', w:{AAA:50, TCT:50}},
-  {id:'diy', no:null, name:'My Portfolio', risk:'Custom', w:{FIXEDSP:50, MAA:50}},
+  {id:'diy', no:null, name:'Wealth Solution Plan', risk:'', w:{}},
 ];
+const RISK_LEVELS = ['Conservative','Conservative to Moderate','Moderate','Moderate to Aggressive','Aggressive'];
 const SLIDE_PERIOD = {start:'2019-04-01', end:'2026-04-24'};
 const STORE = 'wealthplan.csv.v2';
 const TH_MON = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
@@ -381,7 +408,8 @@ let FULL = null;
 const state = {
   plan:'p1',
   weights: Object.fromEntries(PLANS.map(p => [p.id, {...p.w}])),
-  meta: {diy:{name:'My Portfolio', risk:'Custom'}},
+  meta: {diy:{name:'Wealth Solution Plan', risk:''}},
+  view:'input',
   start:null, end:null,
   amount:'',
 };
@@ -401,7 +429,7 @@ async function handleFiles(files){
   else {
     try{
       DATA = {csv: WP.parseModelCSV(await f.text()), csvName: f.name, savedAt: new Date().toISOString()};
-      save(); prepare(); state.start = SLIDE_PERIOD.start; state.end = lastDate();
+      save(); prepare(); state.start = SLIDE_PERIOD.start; state.end = lastDate(); state.view = 'input';
     }catch(e){ err = e.message; }
   }
   render(err);
@@ -464,41 +492,130 @@ const app = document.getElementById('app');
 function render(err=''){
   renderInfo();
   if (!DATA || !DATA.csv){ renderUpload(err); return; }
-  const plan = PLANS.find(p => p.id === state.plan);
+  if (state.view === 'input') renderInput(err); else renderResult(err);
+}
+
+/* ---------- step 1: input ---------- */
+function planMeta(p){ return p.id === 'diy' ? {name: state.meta.diy.name, risk: state.meta.diy.risk} : p; }
+function inputValid(){
+  const amt = parseFloat(state.amount);
+  const raw = state.weights[state.plan], sum = MODEL_ORDER.reduce((a,m) => a + (+raw[m] || 0), 0);
+  const errs = [];
+  if (!(amt > 0)) errs.push('กรอกจำนวนเงินลงทุน');
+  if (state.plan === 'diy'){
+    if (!state.meta.diy.risk) errs.push('เลือก Risk Level');
+    if (Math.abs(sum - 100) > 1e-6) errs.push(`สัดส่วนรวมต้องเท่ากับ 100% (ตอนนี้ ${fmtNum(sum)}%)`);
+  }
+  return errs;
+}
+function renderInput(err){
+  const isDiy = state.plan === 'diy';
+  const raw = state.weights.diy;
+  app.innerHTML = `
+    ${err ? `<div class="hint" style="color:var(--neg);margin-bottom:10px">${esc(err)}</div>` : ''}
+    <div class="form">
+      <section class="step">
+        <div class="step-h"><span class="num">1</span><h2>จำนวนเงินลงทุน</h2></div>
+        <label class="money"><input type="number" id="amt" min="0" step="0.1" inputmode="decimal" placeholder="0" value="${esc(state.amount)}" aria-label="จำนวนเงินลงทุน (ล้านบาท)"><span>ล้านบาท</span></label>
+      </section>
+
+      <section class="step">
+        <div class="step-h"><span class="num">2</span><h2>เลือกแผน</h2></div>
+        <div class="plans" role="radiogroup" aria-label="เลือกแผน">
+          ${PLANS.map(p => {
+            const on = p.id === state.plan, ms = MODEL_ORDER.filter(m => +p.w[m] > 0);
+            return `<button class="plan" role="radio" aria-checked="${on}" data-plan="${p.id}">
+              <span class="pno">${p.no ? 'แผน ' + p.no : 'DIY'}</span>
+              <span class="pname">${esc(p.name)}</span>
+              <span class="prisk">${p.no ? esc(p.risk) : 'จัดสัดส่วนเองตามความต้องการของลูกค้า'}</span>
+              ${p.no ? `<span class="pmix">${ms.map(m => `${m} ${p.w[m]}%`).join(' · ')}</span>` : ''}
+            </button>`; }).join('')}
+        </div>
+      </section>
+
+      ${isDiy ? `
+      <section class="step">
+        <div class="step-h"><span class="num">3</span><h2>Wealth Solution Plan</h2></div>
+        <label class="field" style="max-width:360px">Risk Level
+          <select id="risk">
+            <option value="" ${!state.meta.diy.risk ? 'selected' : ''} disabled>เลือก Risk Level</option>
+            ${RISK_LEVELS.map(r => `<option ${r === state.meta.diy.risk ? 'selected' : ''}>${r}</option>`).join('')}
+          </select></label>
+        <div class="sub" style="margin:10px 0 2px">ใส่ % ของโมเดลที่ต้องการ ช่องที่เว้นว่างจะไม่นับ</div>
+        <div class="groups">
+          ${GROUPS.map(g => `<div><div class="grp">${g.label}</div>` + g.models.filter(m => DATA.csv.models[m]).map(m => `
+            <div class="drow">
+              <span class="nm">${m}</span>
+              <input type="number" min="0" max="100" step="1" id="w-${m}" data-m="${m}" value="${+raw[m] > 0 ? raw[m] : ''}" placeholder="0" aria-label="สัดส่วน ${m}">
+              <span>%</span>
+              <span class="amt" id="a-${m}"></span></div>`).join('') + `</div>`).join('')}
+        </div>
+        <div class="sum" id="sum" style="max-width:360px"><span>รวม</span><span></span></div>
+      </section>` : ''}
+
+      <div class="go">
+        <button class="btn big" id="goBtn">ดูผลลัพธ์ →</button>
+        <span class="hint" id="goMsg" style="margin:0"></span>
+      </div>
+    </div>`;
+  const refresh = () => {
+    const errs = inputValid();
+    app.querySelector('#goBtn').disabled = errs.length > 0;
+    app.querySelector('#goMsg').textContent = errs.length ? 'ยังขาด: ' + errs.join(' · ') : '';
+    if (isDiy){
+      const sum = MODEL_ORDER.reduce((a,m) => a + (+raw[m] || 0), 0), el = app.querySelector('#sum');
+      el.className = 'sum ' + (Math.abs(sum - 100) < 1e-6 ? 'good' : 'bad'); el.lastElementChild.textContent = fmtNum(sum) + '%';
+      const amt = parseFloat(state.amount) || 0;
+      MODEL_ORDER.forEach(m => { const a = app.querySelector('#a-' + m); if (a) a.textContent = amt > 0 && +raw[m] > 0 ? fmtMoney(amt * raw[m] / 100) + ' ลบ.' : ''; });
+    }
+  };
+  app.querySelector('#amt').oninput = e => { state.amount = e.target.value; refresh(); };
+  app.querySelectorAll('[data-plan]').forEach(b => b.onclick = () => { state.plan = b.dataset.plan; renderInput(); });
+  if (isDiy){
+    app.querySelector('#risk').onchange = e => { state.meta.diy.risk = e.target.value; refresh(); };
+    app.querySelectorAll('input[data-m]').forEach(inp => inp.oninput = () => {
+      const v = inp.value === '' ? 0 : +inp.value;
+      if (v > 0) raw[inp.dataset.m] = v; else delete raw[inp.dataset.m];
+      refresh();
+    });
+  }
+  app.querySelector('#goBtn').onclick = () => { if (!inputValid().length){ state.view = 'result'; render(); window.scrollTo(0, 0); } };
+  refresh();
+}
+
+/* ---------- step 2: result ---------- */
+function renderResult(err){
+  const plan = PLANS.find(p => p.id === state.plan), meta = planMeta(plan);
+  const raw = state.weights[state.plan], ms = MODEL_ORDER.filter(m => +raw[m] > 0);
   app.innerHTML = `
     ${err ? `<div class="hint" style="color:var(--neg);margin-bottom:10px">${esc(err)}</div>` : ''}
     <div class="controls">
-      <div class="tabs" role="group" aria-label="เลือกแผน">
-        ${PLANS.map(p => `<button class="tab" aria-pressed="${p.id===state.plan}" data-plan="${p.id}">${p.no ? 'แผน '+p.no : 'DIY'}</button>`).join('')}
-      </div>
-      <label class="range">เงินลงทุน
-        <input type="number" id="amt" min="0" step="0.1" inputmode="decimal" placeholder="เช่น 10" value="${esc(state.amount)}" style="width:110px;text-align:right">
-        ล้านบาท</label>
+      <button class="btn ghost" id="backBtn">← แก้ไขข้อมูล</button>
+      <div class="summary"><b>${plan.no ? 'แผน ' + plan.no + ' · ' : ''}${esc(meta.name)}</b>
+        <span>${esc(meta.risk)}</span><span>${fmtMoney(parseFloat(state.amount) || 0)} ล้านบาท</span>
+        <span>${ms.map(m => `${m} ${raw[m]}%`).join(' · ')}</span></div>
+    </div>
+    <div class="controls">
       <div class="range">
         <span>ช่วงข้อมูล</span>
         <input type="date" id="dStart" value="${state.start}" min="${DATA.csv.dates[0]}" max="${lastDate()}">
         <span>ถึง</span>
         <input type="date" id="dEnd" value="${state.end}" min="${DATA.csv.dates[0]}" max="${lastDate()}">
-        <button class="btn ghost" id="pSlide">ตามสไลด์ (เม.ย. 2019 – เม.ย. 2026)</button>
+        <button class="btn ghost" id="pSlide">เม.ย. 2019 – เม.ย. 2026</button>
         <button class="btn ghost" id="pLatest">ถึงข้อมูลล่าสุด</button>
       </div>
     </div>
-    <div class="main">
-      <div class="stage">
-        <div class="scaler" id="scaler"><div class="slide" id="slide"></div></div>
-        <div class="hint" id="note"></div>
-        <section class="eq" id="eq" aria-label="Equity curve"></section>
-      </div>
-      <div class="panel" id="panel"></div>
+    <div class="stage">
+      <div class="scaler" id="scaler"><div class="slide" id="slide"></div></div>
+      <div class="hint" id="note"></div>
+      <section class="eq" id="eq" aria-label="Equity curve"></section>
     </div>`;
-  app.querySelectorAll('[data-plan]').forEach(b => b.onclick = () => { state.plan = b.dataset.plan; render(); });
-  app.querySelector('#amt').oninput = e => { state.amount = e.target.value; update(); };
+  app.querySelector('#backBtn').onclick = () => { state.view = 'input'; render(); window.scrollTo(0, 0); };
   const ds = app.querySelector('#dStart'), de = app.querySelector('#dEnd');
   ds.onchange = () => { if (ds.value){ state.start = ds.value; update(); } };
   de.onchange = () => { if (de.value){ state.end = de.value; update(); } };
   app.querySelector('#pSlide').onclick = () => { state.start = SLIDE_PERIOD.start; state.end = SLIDE_PERIOD.end; ds.value = state.start; de.value = state.end; update(); };
   app.querySelector('#pLatest').onclick = () => { state.start = SLIDE_PERIOD.start; state.end = lastDate(); ds.value = state.start; de.value = state.end; update(); };
-  renderPanel(plan);
   update();
   fit();
 }
@@ -527,7 +644,7 @@ function colorsFor(models, raw){
 }
 
 function slideHTML(plan, r){
-  const meta = plan.id === 'diy' ? state.meta.diy : plan;
+  const meta = planMeta(plan);
   const models = r.models;
   if (!models.length) return `<div class="s-msg">ใส่ % ของโมเดลในแผงด้านขวา</div>`;
   const col = colorsFor(models, r.raw);
@@ -834,52 +951,6 @@ const GROUPS = [
   {label:'Asset Allocation', models:['CAA','MAA','AAA','DAA']},
   {label:'หุ้นโลก', models:['TCT']},
 ];
-function renderPanel(plan){
-  const isDiy = plan.id === 'diy';
-  const raw = state.weights[plan.id];
-  const el = document.getElementById('panel');
-  const active = MODEL_ORDER.filter(m => +raw[m] > 0);
-  const filterLine = `<div class="meta">
-      เกณฑ์นับ drawdown ของพอร์ต: <b id="thr">—</b><br>
-      = ผลรวมของ (สัดส่วน × เกณฑ์ของแต่ละโมเดล)<br>
-      <span id="thrParts">${active.map(m => `${m} ${MODEL_INFO[m].filter}%`).join(' · ')}</span>
-    </div>`;
-  if (!isDiy){
-    const col = colorsFor(active, raw);
-    el.innerHTML = `
-      <h3>แผน ${plan.no} · ${esc(plan.name)}</h3>
-      <div class="sub">Risk Profile: ${esc(plan.risk)}</div>
-      ${active.map(m => `<div class="frow"><span class="sw" style="background:${col[m]}"></span><span class="nm">${m}</span><span class="pc">${raw[m]}%</span></div>`).join('')}
-      <div class="sum" id="sum"><span>รวม</span><span></span></div>
-      <div class="sub" style="margin-top:10px">ต้องการลองสัดส่วนอื่น ใช้แท็บ DIY</div>
-      ${filterLine}`;
-    return;
-  }
-  el.innerHTML = `
-    <h3>จัดพอร์ตเอง (DIY)</h3>
-    <div class="sub">ใส่ % ของโมเดลที่ต้องการ ช่องที่เว้นว่างหรือ 0 จะไม่นับ</div>
-    <label class="field">ชื่อพอร์ต<input id="mName" value="${esc(state.meta.diy.name)}"></label>
-    <label class="field">Risk Profile<input id="mRisk" value="${esc(state.meta.diy.risk)}"></label>
-    ${GROUPS.map(g => `<div class="grp">${g.label}</div>` + g.models.filter(m => DATA.csv.models[m]).map(m => `
-      <div class="drow">
-        <span class="nm">${m}</span>
-        <input type="number" min="0" max="100" step="1" id="w-${m}" data-m="${m}" value="${+raw[m] > 0 ? raw[m] : ''}" placeholder="0" aria-label="สัดส่วน ${m}">
-        <span>%</span></div>`).join('')).join('')}
-    <div class="sum" id="sum"><span>รวม</span><span></span></div>
-    <div class="addrow"><button class="btn ghost" id="clearBtn" style="flex:1">ล้างทั้งหมด</button></div>
-    ${filterLine}`;
-  el.querySelectorAll('input[data-m]').forEach(inp => inp.oninput = () => {
-    const v = inp.value === '' ? 0 : +inp.value;
-    if (v > 0) raw[inp.dataset.m] = v; else delete raw[inp.dataset.m];
-    const act = MODEL_ORDER.filter(m => +raw[m] > 0);
-    document.getElementById('thrParts').textContent = act.map(m => `${m} ${MODEL_INFO[m].filter}%`).join(' · ');
-    update();
-  });
-  el.querySelector('#clearBtn').onclick = () => { state.weights.diy = {}; renderPanel(plan); update(); };
-  el.querySelector('#mName').oninput = e => { state.meta.diy.name = e.target.value; update(); };
-  el.querySelector('#mRisk').oninput = e => { state.meta.diy.risk = e.target.value; update(); };
-}
-
 function renderInfo(){
   const el = document.getElementById('datainfo');
   if (!DATA || !DATA.csv){ el.innerHTML = ''; return; }
