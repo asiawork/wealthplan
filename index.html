@@ -37,7 +37,7 @@ button,input,select{font-family:inherit;font-size:inherit;color:inherit}
 .uppanel p{margin:0 0 10px;color:var(--muted);line-height:1.55}
 .upsteps{margin:4px 0 14px;padding-left:20px;line-height:1.75;text-align:left}
 .upsteps b{color:var(--ink)}
-.upsteps a{color:var(--navy);font-weight:600}
+.upsteps a{color:var(--accent);font-weight:600;text-decoration:underline}
 .kbd{display:inline-block;border:1px solid var(--line);border-radius:5px;padding:0 6px;font-size:12px;background:#f6f8fb;color:var(--ink)}
 .upnote{font-size:12px;color:var(--muted);margin:12px 0 0 !important;line-height:1.5}
 .uplead{color:var(--muted);max-width:520px;margin:6px auto 10px;line-height:1.55}
@@ -1188,9 +1188,9 @@ const GROUPS = [
   {label:'Asset Allocation', models:['CAA','MAA','AAA','DAA']},
   {label:'หุ้นโลก', models:['TCT']},
 ];
-const TABLEAU_URL = '';   // ลิงก์ Tableau · Model Performance (ใส่ได้ภายหลัง)
+const TABLEAU_URL = 'https://tableau.sawasdee.brk1/#/views/All_model_performance/ModelPerformance?:iid=2';   // ลิงก์ Tableau · Model Performance (ใส่ได้ภายหลัง)
 function uploadSteps(){
-  const link = TABLEAU_URL ? `<a href="${TABLEAU_URL}" target="_blank" rel="noopener">Tableau · Model Performance</a>` : '<b>Tableau · Model Performance</b>';
+  const link = TABLEAU_URL ? `<b>Tableau ·</b> <a href="${TABLEAU_URL}" target="_blank" rel="noopener">Model Performance</a>` : '<b>Tableau · Model Performance</b>';
   return `<ol class="upsteps">
       <li>เปิด ${link}</li>
       <li>เลือก<b>ทุกโมเดล</b></li>
