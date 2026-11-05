@@ -15,7 +15,7 @@ The CSV stays in your browser. It is not uploaded to this repository.
 - `fonts/` (optional) — add `BLS-Bold.ttf`, `BLS-Regular.ttf`, `BLS_Text-Regular.ttf`, `BLS_Text-Bold.ttf` to use the company fonts; otherwise Kanit is used.
 
 ## Method
-- Portfolio: daily-rebalanced fixed weights.
+- Portfolio: buy-and-hold — weights are set on the start date and then drift with each model (no rebalancing), the same as the research workbook.
 - 1Y rolling return: NAV(d) / NAV(same date 12 months earlier, or nearest earlier) − 1.
 - Drawdown / recovery cycles: every day is a possible entry. An entry counts as a cycle when the portfolio falls by at least the threshold within 84 trading days. Drawdown = trough vs entry; recovery = calendar days until back to the entry value. Median uses recovered cycles; Longest is the longest cycle.
 - Threshold = Σ weight × model threshold (FIXEDSP 0.05%, FIXEDTDP/FIXEDDP 0.5%, CAA 2%, MAA/AAA/DAA/TCT 4%).

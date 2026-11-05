@@ -266,7 +266,7 @@ const WP = (() => {
   }
 
   /* ---------- back out pre-inception TDP / TCT from plan NAVs ---------- */
-  // plan1 = 80% FIXEDSP + 20% FIXEDTDP ; plan5 = 50% AAA + 50% TCT (daily rebalanced)
+  // plan1 = 80% FIXEDSP + 20% FIXEDTDP ; plan5 = 50% AAA + 50% TCT (buy-and-hold from 2019-04-01)
   const BACKOUT = {
     FIXEDTDP: { plan: 'plan1', known: { FIXEDSP: 0.8 }, w: 0.2 },
     TCT:      { plan: 'plan5', known: { AAA: 0.5 },     w: 0.5 },
@@ -285,12 +285,11 @@ const WP = (() => {
         if (kv.some(v => v == null)) return;
         pts.push({ d, pv, kv });
       });
-      const dates = [pts[0].d], lv = [1];
-      for (let i = 1; i < pts.length; i++) {
-        if (inc && pts[i - 1].d >= inc) break;           // only needed up to inception
-        const rp = pts[i].pv / pts[i - 1].pv - 1;
-        let rk = 0; Object.values(spec.known).forEach((w, j) => { rk += w * (pts[i].kv[j] / pts[i - 1].kv[j] - 1); });
-        dates.push(pts[i].d); lv.push(lv[lv.length - 1] * (1 + (rp - rk) / spec.w));
+      const dates = [], lv = [], p0 = pts[0];
+      for (let i = 0; i < pts.length; i++){
+        if (inc && i > 0 && pts[i - 1].d >= inc) break;            // only needed up to inception
+        let k = pts[i].pv / p0.pv; Object.values(spec.known).forEach((w, j) => { k -= w * pts[i].kv[j] / p0.kv[j]; });
+        dates.push(pts[i].d); lv.push(k / spec.w);
       }
       out[model] = { dates, lv, inception: inc };
     }
@@ -321,19 +320,20 @@ const WP = (() => {
   }
   function firstDate(full, m) { const s = full.models[m]; const i = s ? s.findIndex(v => v != null) : -1; return i < 0 ? null : full.dates[i]; }
 
-  /* ---------- portfolio: daily-rebalanced fixed weights ---------- */
-  function portfolio(full, weights, start, end) {
+  /* ---------- portfolio: buy-and-hold (weights set at the start, no rebalancing) ----------
+     matches the research workbook: value(t) = sum_i w_i * level_i(t) / level_i(start) */
+  function portfolio(full, weights, start, end){
     const ms = Object.keys(weights).filter(m => weights[m] > 0);
-    const dates = [], nav = [];
-    let prev = -1, lvl = 1;
-    for (let i = 0; i < full.dates.length; i++) {
+    const dates = [], nav = []; let i0 = -1;
+    for (let i = 0; i < full.dates.length; i++){
       const d = full.dates[i];
       if (d < start || d > end) continue;
       if (ms.some(m => full.models[m][i] == null)) continue;
-      if (prev >= 0) { let r = 0; ms.forEach(m => { r += weights[m] * (full.models[m][i] / full.models[m][prev] - 1); }); lvl *= 1 + r; }
-      dates.push(d); nav.push(lvl); prev = i;
+      if (i0 < 0) i0 = i;
+      let v = 0; ms.forEach(m => { v += weights[m] * full.models[m][i] / full.models[m][i0]; });
+      dates.push(d); nav.push(v);
     }
-    return { dates, nav };
+    const b = nav[0]; return { dates, nav: nav.map(v => v / b) };
   }
 
   /* ---------- metrics ---------- */
@@ -966,7 +966,7 @@ function drawEquity(r){
       <div class="eq-ctl"><label><input type="checkbox" id="eqModels" ${EQ.models ? 'checked' : ''}> แสดงแต่ละโมเดล</label>
       <span>${thDate(r.start)} – ${thDate(r.end)}</span></div></div>
     <div class="eq-legend">
-      <span><i style="border-color:var(--navy)"></i>พอร์ต (ปรับสัดส่วนทุกวัน)</span>
+      <span><i style="border-color:var(--navy)"></i>พอร์ต (ซื้อแล้วถือ ไม่ปรับสัดส่วน)</span>
       ${series.slice(1).map(s => `<span><i class="thin" style="border-color:${s.color}"></i>${s.name}</span>`).join('')}
       ${bfI > 0 ? `<span><i class="box" style="background:#e9ecf2"></i>ช่วงใช้ผลทดสอบย้อนหลัง</span>` : ''}
     </div>
