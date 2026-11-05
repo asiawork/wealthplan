@@ -101,6 +101,7 @@ button,input,select{font-family:inherit;font-size:inherit;color:inherit}
 .plan.hero .pname{font-size:19px}
 .plan.hero .prisk{font-size:13px}
 .plan.hero[aria-checked="false"]{border-color:var(--accent);border-style:dashed}
+.dtag{background:var(--navy);color:#fff;font-size:11.5px;font-weight:700;letter-spacing:.5px;border-radius:5px;padding:2px 7px}
 .orline{display:flex;align-items:center;gap:10px;margin:16px 0 10px;font-size:12.5px;color:var(--muted)}
 .orline::before,.orline::after{content:'';flex:1;height:1px;background:var(--line)}
 .plans .plan{padding:11px 12px}
@@ -693,12 +694,6 @@ function renderInput(err){
 
       <section class="step">
         <div class="step-h"><span class="num">2</span><h2>เลือกรูปแบบพอร์ต</h2></div>
-        <button class="plan diy hero" role="radio" aria-checked="${isDiy}" data-plan="diy">
-          <span class="ptop"><span class="pno">จัดพอร์ตเอง</span></span>
-          <span class="pname">Wealth Solution Plan</span>
-          <span class="prisk">เลือกโมเดลและสัดส่วนให้ตรงกับลูกค้า · เริ่มจากสัดส่วนของแผนสำเร็จรูปแล้วปรับต่อได้</span>
-        </button>
-        <div class="orline"><span>หรือใช้แผนสำเร็จรูป</span></div>
         <div class="plans" role="radiogroup" aria-label="แผนสำเร็จรูป">
           ${PLANS.filter(p => p.no).map(p => {
             const on = p.id === state.plan, ms = MODEL_ORDER.filter(m => +p.w[m] > 0);
@@ -709,6 +704,12 @@ function renderInput(err){
               <span class="pmix">${ms.map(m => `<b>${m}</b><span>${p.w[m]}%</span>`).join('')}</span>
             </button>`; }).join('')}
         </div>
+        <div class="orline"><span>หรือจัดพอร์ตเอง</span></div>
+        <button class="plan diy hero" role="radio" aria-checked="${isDiy}" data-plan="diy">
+          <span class="ptop"><span class="dtag">DIY</span><span class="pno">จัดพอร์ตเอง</span></span>
+          <span class="pname">Wealth Solution Plan</span>
+          <span class="prisk">เลือกโมเดลและสัดส่วนให้ตรงกับลูกค้า · เริ่มจากสัดส่วนของแผนสำเร็จรูปแล้วปรับต่อได้</span>
+        </button>
       </section>
 
       ${isDiy ? `
