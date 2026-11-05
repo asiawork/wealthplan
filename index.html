@@ -624,7 +624,7 @@ function render(err=''){
 }
 
 /* ---------- step 1: input ---------- */
-function planMeta(p){ return p.id === 'diy' ? {name: state.meta.diy.name, risk: state.meta.diy.risk} : p; }
+function planMeta(p){ return p.id === 'diy' ? {name: state.meta.diy.name, risk: ''} : p; }
 function lowModels(){
   const amt = parseFloat(state.amount), raw = state.weights.diy;
   if (!(amt > 0)) return [];
@@ -637,7 +637,6 @@ function inputValid(){
   if (!(amt > 0)) errs.push('กรอกจำนวนเงินลงทุน');
   else if (amt < MIN_PLAN) errs.push(`เงินลงทุนขั้นต่ำ ${MIN_PLAN} ล้านบาท`);
   if (state.plan === 'diy'){
-    if (!state.meta.diy.risk) errs.push('เลือก Risk Level ของลูกค้า');
     if (Math.abs(sum - 100) > 1e-6) errs.push(`จัดสัดส่วนให้ครบ 100% (ตอนนี้ ${fmtNum(sum)}%)`);
     const low = lowModels();
     if (amt >= MIN_PLAN && low.length){
@@ -650,7 +649,6 @@ function inputValid(){
 function loadFrom(id){
   const p = PLANS.find(x => x.id === id && x.no);
   state.weights.diy = p ? {...p.w} : {};
-  if (p && !state.meta.diy.risk) state.meta.diy.risk = RISK_LEVELS.find(r => p.risk.startsWith(r) && (p.risk === r || r === 'Moderate')) || '';
 }
 const RISK_NUM = r => ({'Conservative':1,'Conservative to Moderate':2,'Moderate With Yield':3,'Moderate':3,'Moderate to Aggressive':4,'Aggressive':5})[r] || 0;
 const riskMeter = (lvl, big) => `<span class="meter${big ? ' big' : ''}" aria-label="ระดับความเสี่ยง ${lvl} จาก 5">${[1,2,3,4,5].map(i => `<i class="${i <= lvl ? 'on l' + lvl : ''}"></i>`).join('')}</span>`;
@@ -716,10 +714,6 @@ function renderInput(err){
       ${isDiy ? `
       <section class="step">
         <div class="step-h"><span class="num">3</span><h2>จัดพอร์ต Wealth Solution Plan</h2></div>
-        <div class="lbl">Risk Level ของลูกค้า</div>
-        <div class="seg" role="radiogroup" aria-label="Risk Level">
-          ${RISK_LEVELS.map(r => `<button role="radio" aria-checked="${r === state.meta.diy.risk}" data-risk="${esc(r)}">${riskMeter(RISK_NUM(r))}<span>${r}</span></button>`).join('')}
-        </div>
         <div class="from">เริ่มจากสัดส่วนของ
           ${PLANS.filter(p => p.no).map(p => `<button class="chip" data-from="${p.id}" title="${esc(p.name)}">แผน ${p.no}</button>`).join('')}
           <button class="chip ghostchip" data-from="">ล้างทั้งหมด</button></div>
@@ -757,7 +751,7 @@ function renderInput(err){
     app.querySelectorAll('[data-set]').forEach(b => b.setAttribute('aria-pressed', +b.dataset.set === amt));
     app.querySelector('#sumBody').innerHTML = `
       <div class="sum-plan">${plan.no ? `<span class="pno">แผน ${plan.no}</span>` : '<span class="pno">DIY</span>'}<b>${esc(meta.name)}</b>
-        <span class="sum-risk">${meta.risk ? riskMeter(RISK_NUM(meta.risk)) + esc(meta.risk) : '<span class="muted">ยังไม่เลือก Risk Level</span>'}</span></div>
+        ${meta.risk ? `<span class="sum-risk">${riskMeter(RISK_NUM(meta.risk)) + esc(meta.risk)}</span>` : ''}</div>
       <div class="sum-main">${miniDonut(ms, w)}<div><div class="sum-amt">${amt > 0 ? fmtMoney(amt) : '—'}</div><div class="muted">ล้านบาท</div></div></div>
       <div class="sum-list">${ms.length ? ms.map(m => `<div class="${low.has(m) ? 'low' : ''}"><i style="background:${col[m]}"></i><b>${m}</b><span>${fmtNum(+w[m])}%</span><span>${amt > 0 ? fmtMoney(amt * w[m] / 100) + ' ลบ.' : ''}</span></div>`).join('') : '<div class="muted">ยังไม่ได้ใส่สัดส่วน</div>'}</div>`;
     const errs = inputValid();
@@ -783,7 +777,6 @@ function renderInput(err){
   });
   app.querySelectorAll('[data-from]').forEach(b => b.onclick = () => { loadFrom(b.dataset.from); renderInput(); });
   if (isDiy){
-    app.querySelectorAll('[data-risk]').forEach(b => b.onclick = () => { state.meta.diy.risk = b.dataset.risk; app.querySelectorAll('[data-risk]').forEach(x => x.setAttribute('aria-checked', x === b)); refresh(); });
     const setW = (m, v) => { v = Math.max(0, Math.min(100, v)); if (v > 0) raw[m] = v; else delete raw[m]; app.querySelector('#w-' + m).value = v > 0 ? v : ''; refresh(); };
     app.querySelectorAll('input[data-m]').forEach(inp => inp.oninput = () => { const v = inp.value === '' ? 0 : +inp.value; if (v > 0) raw[inp.dataset.m] = v; else delete raw[inp.dataset.m]; refresh(); });
     app.querySelectorAll('[data-step]').forEach(b => b.onclick = () => setW(b.dataset.step, (+raw[b.dataset.step] || 0) + +b.dataset.d));
@@ -801,7 +794,7 @@ function renderResult(err){
     <div class="controls">
       <button class="btn ghost" id="backBtn">← แก้ไขข้อมูล</button>
       <div class="summary"><b>${plan.no ? 'แผน ' + plan.no + ' · ' : ''}${esc(meta.name)}</b>
-        <span>${esc(meta.risk)}</span><span>${fmtMoney(parseFloat(state.amount) || 0)} ล้านบาท</span>
+        ${meta.risk ? `<span>${esc(meta.risk)}</span>` : ''}<span>${fmtMoney(parseFloat(state.amount) || 0)} ล้านบาท</span>
         <span>${ms.map(m => `${m} ${raw[m]}%`).join(' · ')}</span></div>
     </div>
     <div class="controls">
@@ -864,7 +857,7 @@ function slideHTML(plan, r){
   const models = r.models;
   if (!models.length) return `<div class="s-msg">ใส่ % ของโมเดลในแผงด้านขวา</div>`;
   const col = colorsFor(models, r.raw);
-  const titleBlock = `<div class="s-title"><div class="n">${esc(meta.name)}</div><div class="r">- Risk Profile: ${esc(meta.risk)} -</div></div>`;
+  const titleBlock = `<div class="s-title"><div class="n">${esc(meta.name)}</div>${meta.risk ? `<div class="r">- Risk Profile: ${esc(meta.risk)} -</div>` : ''}</div>`;
   if (Math.abs(r.sum-100) > 1e-6) return `<div class="s-msg">สัดส่วนรวม ${fmtNum(r.sum)}% — ต้องเท่ากับ 100% ถึงจะคำนวณได้</div>`;
   if (r.missing) return `<div class="s-msg">ไม่มีข้อมูลของ ${r.missing.join(', ')} ในไฟล์ CSV</div>`;
   if (r.short) return `<div class="s-msg">ช่วงข้อมูลสั้นเกินไป ลองขยายช่วงวันที่</div>`;
@@ -1272,8 +1265,9 @@ async function exportPPTX(){
     // title block
     const tb = box(slideEl.querySelector('.s-title'));
     s.addShape(pptx.ShapeType.rect, {x: tb.x, y: tb.y, w: tb.w, h: tb.h, fill: {color: NAVY}, line: {type: 'none'}});
-    s.addText([{text: meta.name, options: {fontFace: HF, fontSize: 30, bold: true, breakLine: true}},
-               {text: `- Risk Profile: ${meta.risk} -`, options: {fontFace: BF, fontSize: 12, color: 'DFE5EF'}}],
+    s.addText(meta.risk ? [{text: meta.name, options: {fontFace: HF, fontSize: 30, bold: true, breakLine: true}},
+               {text: `- Risk Profile: ${meta.risk} -`, options: {fontFace: BF, fontSize: 12, color: 'DFE5EF'}}]
+             : [{text: meta.name, options: {fontFace: HF, fontSize: 30, bold: true}}],
       {x: tb.x, y: tb.y, w: tb.w, h: tb.h, align: 'center', valign: 'middle', color: 'FFFFFF', margin: 0});
     // table
     const tbl = slideEl.querySelector('.tbl'), tbB = box(tbl);
