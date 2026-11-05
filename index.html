@@ -179,15 +179,37 @@ button,input,select{font-family:inherit;font-size:inherit;color:inherit}
 .sum-list span:last-child{min-width:62px}
 .sum-list .low span{color:var(--neg);font-weight:600}
 .btn.full{width:100%}
-.qr{border-bottom:3px solid var(--navy)}
-.qr-h{background:var(--navy);color:#fff;text-align:center;font-family:var(--head);font-weight:600;font-size:15px;padding:7px}
-.qr-row{display:grid;grid-template-columns:44% 56%;align-items:center;min-height:48px;border-bottom:1px solid #8b93a3;font-size:12.5px;text-align:center;line-height:1.2}
-.qr-row:last-of-type{border-bottom:0}
-.qr-row b{font-family:var(--head);font-weight:600;font-size:18px;font-variant-numeric:tabular-nums;display:block}
-.qr-row .big b{font-size:26px}
-.qr-row small{display:block;font-size:10.5px;color:#333;margin-top:1px}
-.qr-empty{padding:14px 6px;text-align:center;font-size:12.5px;color:var(--muted)}
-.qr-note{font-size:11px;color:var(--muted);margin-top:-4px;line-height:1.45}
+.qr{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.qr-col{border-bottom:3px solid var(--navy);min-width:0}
+.qr-h{background:var(--navy);color:#fff;text-align:center;font-family:var(--head);font-weight:600;font-size:13px;padding:6px 4px}
+.qr-row{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:52px;border-bottom:1px solid #8b93a3;text-align:center;line-height:1.15;padding:4px 2px}
+.qr-row:last-child{border-bottom:0}
+.qr-row>span{font-size:11px;color:var(--ink)}
+.qr-row b{font-family:var(--head);font-weight:600;font-size:19px;font-variant-numeric:tabular-nums}
+.qr-row small{font-size:10px;color:#333}
+.qr .qr-empty{grid-column:1/-1}
+.qr-empty{padding:14px 6px;text-align:center;font-size:12.5px;color:var(--muted);border-bottom:3px solid var(--navy)}
+.qr-note{font-size:11px;color:var(--muted);margin-top:6px;line-height:1.45}
+.sug{border:1.5px solid var(--accent);border-radius:12px;background:#f5f8fd;margin:14px 0 6px;padding:0 16px}
+.sug summary{cursor:pointer;padding:12px 0;font-weight:600;color:var(--accent);list-style:none}
+.sug summary::-webkit-details-marker{display:none}
+.sug summary::before{content:'＋ ';}
+.sug[open] summary::before{content:'－ ';}
+.sug-in{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:flex-end;padding-bottom:12px}
+.sug-in label{display:flex;flex-direction:column;gap:4px;font-size:12.5px;color:var(--muted)}
+.sfield{display:inline-flex;align-items:center;gap:4px;font-size:15px;color:var(--ink)}
+.sfield input{width:80px;border:1.5px solid var(--line);border-radius:8px;padding:6px 8px;text-align:right;font-size:16px;font-variant-numeric:tabular-nums;background:#fff}
+.sfield em{font-style:normal;color:var(--muted)}
+.sug-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;padding-bottom:6px}
+.sug-card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.sug-mix{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:13px}
+.sug-mix b{font-weight:600}
+.sug-stat{display:flex;flex-wrap:wrap;gap:2px 12px;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.sug-stat b{font-weight:600}
+.sug-card .chip{align-self:flex-start;padding:5px 12px;font-size:13px}
+.sug-warn{font-size:12.5px;color:#9a6700;background:#fff7e0;border-radius:8px;padding:6px 10px;margin-bottom:8px}
+#sOut:empty{display:none}
+#sOut{padding-bottom:10px}
 .todo{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:5px;font-size:12.5px;line-height:1.45}
 .todo li{position:relative;padding-left:18px;color:var(--neg)}
 .todo li::before{content:'!';position:absolute;left:0;top:1px;width:13px;height:13px;border-radius:50%;background:var(--neg);color:#fff;font-size:9.5px;font-weight:700;display:grid;place-items:center}
@@ -701,23 +723,61 @@ function miniDonut(ms, raw){
     a0 = a1; });
   return `<svg viewBox="0 0 100 100" class="mdonut">${out}</svg>`;
 }
-/* rough return preview for the summary panel: 1Y rolling average and total return (dividend included) */
+/* preview for the summary panel: Return (1Y rolling avg, total, dividend included) + Drawdown (median, max) */
 function quickReturn(raw, ms, sum){
-  const head = `<div class="qr-h">Return</div>`;
   if (!ms.length || Math.abs(sum - 100) > 1e-6 || ms.some(m => !FULL.models[m]))
-    return `<div class="qr">${head}<div class="qr-empty">จัดสัดส่วนให้ครบ 100% เพื่อดูผลตอบแทน</div></div>`;
+    return `<div class="qr"><div class="qr-h">Return &amp; Drawdown</div><div class="qr-empty">จัดสัดส่วนให้ครบ 100% เพื่อดูผลตอบแทน</div></div>`;
   const w = Object.fromEntries(ms.map(m => [m, +raw[m] / 100]));
   const s = WP.portfolio(FULL, w, state.start, state.end);
   if (s.dates.length < 30) return '';
-  const roll = WP.rolling1y(s).map(x => x.r), avg = roll.length ? roll.reduce((a, b) => a + b, 0) / roll.length : null;
-  const total = s.nav[s.nav.length - 1] / s.nav[0] - 1, years = WP.daysBetween(s.dates[0], s.dates[s.dates.length - 1]) / 365.25;
+  const thr = ms.reduce((a, m) => a + MODEL_INFO[m].filter * w[m], 0) / 100;
+  const st = WP.stats(s, thr), years = WP.daysBetween(s.dates[0], s.dates[s.dates.length - 1]) / 365.25;
   const dy = ms.reduce((a, m) => a + (DIV_YIELD[m] || 0) * w[m], 0), yrs = Math.max(1, Math.floor(years + 0.02));
-  const v = (x, d) => `<b class="${cls(x)}">${pct(x)}</b>${d ? `<small>(เงินปันผล ${pct(d)})</small>` : ''}`;
-  return `<div class="qr">${head}
-    <div class="qr-row"><span>1Y Rolling<br>Average</span><span class="big">${avg == null ? '—' : v(avg + dy, dy)}</span></div>
-    <div class="qr-row"><span>${yrs}Y<br>Total Return</span><span>${v(total + dy * years, dy * years)}</span></div>
-    </div><div class="qr-note">ผลการดำเนินงานย้อนหลัง ${thMonYear(s.dates[0])} – ${thMonYear(s.dates[s.dates.length - 1])} · ดู Drawdown และรายละเอียดอื่นในหน้าผลลัพธ์</div>`;
+  const v = (x, d) => `<b class="${cls(x)}">${pct(x)}</b>${d ? `<small>(ปันผล ${pct(d)})</small>` : ''}`;
+  return `<div class="qr">
+      <div class="qr-col"><div class="qr-h">Return</div>
+        <div class="qr-row"><span>1Y Rolling Avg</span>${v(st.rollAvg + dy, dy)}</div>
+        <div class="qr-row"><span>${yrs}Y Total</span>${v(st.total + dy * years, dy * years)}</div></div>
+      <div class="qr-col"><div class="qr-h">${yrs}Y Drawdown</div>
+        <div class="qr-row"><span>Median</span>${v(st.cycDDMedian)}</div>
+        <div class="qr-row"><span>Max</span>${v(st.maxDD)}</div></div>
+    </div>
+    <div class="qr-note">ผลการดำเนินงานย้อนหลัง ${thMonYear(s.dates[0])} – ${thMonYear(s.dates[s.dates.length - 1])} · ดูรายละเอียดทั้งหมดในหน้าผลลัพธ์</div>`;
 }
+
+/* ---------- suggest a DIY mix: target 1Y avg return, max drawdown limit ---------- */
+function suggestMixes(target, ddLimit, amt){
+  const ms = MODEL_ORDER.filter(m => FULL.models[m]);
+  const idx = []; for (let i = 0; i < FULL.dates.length; i++){ const d = FULL.dates[i]; if (d < state.start || d > state.end) continue; if (ms.every(m => FULL.models[m][i] != null)) idx.push(i); }
+  const n = idx.length; if (n < 300) return [];
+  const dates = idx.map(i => FULL.dates[i]);
+  const L = ms.map(m => { const a = FULL.models[m], b = a[idx[0]]; return Float64Array.from(idx, i => a[i] / b); });
+  const back = new Int32Array(n).fill(-1); { let j = 0; for (let i = 0; i < n; i++){ const t0 = WP.edate(dates[i], -12); if (t0 < dates[0]) continue; while (j + 1 < n && dates[j + 1] <= t0) j++; back[i] = j; } }
+  const years = WP.daysBetween(dates[0], dates[n - 1]) / 365.25;
+  const minW = Math.max(10, Math.ceil(MIN_PER_MODEL / amt * 100 / 10) * 10);   // 10% steps, >= 5 แสน per model
+  const out = [], V = new Float64Array(n), w = new Array(ms.length).fill(0);
+  const evalMix = () => {
+    V.fill(0); for (let k = 0; k < ms.length; k++) if (w[k]){ const f = w[k] / 100, Lk = L[k]; for (let i = 0; i < n; i++) V[i] += f * Lk[i]; }
+    let pk = 0, mdd = 0, s = 0, c = 0;
+    for (let i = 0; i < n; i++){ if (V[i] > pk) pk = V[i]; const d = V[i] / pk - 1; if (d < mdd) mdd = d; if (back[i] >= 0){ s += V[i] / V[back[i]] - 1; c++; } }
+    let dy = 0; for (let k = 0; k < ms.length; k++) dy += (DIV_YIELD[ms[k]] || 0) * w[k] / 100;
+    out.push({w: Object.fromEntries(ms.map((m, k) => [m, w[k]]).filter(x => x[1] > 0)), avg: s / c + dy, total: V[n - 1] - 1 + dy * years, mdd, k: w.filter(x => x).length});
+  };
+  const rec = (k, left, used) => {
+    if (left === 0){ evalMix(); return; }
+    if (k === ms.length || used === 4) return;
+    for (let x = left; x >= minW; x -= 10){ if (left - x !== 0 && left - x < minW) continue; w[k] = x; rec(k + 1, left - x, used + 1); }
+    w[k] = 0; rec(k + 1, left, used);
+  };
+  rec(0, 100, 0);
+  const ok = out.filter(o => o.mdd >= -ddLimit);
+  const score = o => Math.abs(o.avg - target);
+  const pick = (ok.length ? ok : out).sort((a, b) => ok.length ? (score(a) - score(b)) || (b.mdd - a.mdd) || (a.k - b.k) : (b.mdd - a.mdd));
+  const res = [], seen = new Set();
+  for (const o of pick){ const key = Object.keys(o.w).sort().join(); if (seen.has(key)) continue; seen.add(key); res.push(o); if (res.length === 3) break; }
+  return {fits: ok.length > 0, list: res, from: dates[0], to: dates[n - 1]};
+}
+
 function renderInput(err){
   const isDiy = state.plan === 'diy', raw = state.weights.diy;
   app.innerHTML = `
@@ -763,6 +823,17 @@ function renderInput(err){
         <div class="from">เริ่มจากสัดส่วนของ
           ${PLANS.filter(p => p.no).map(p => `<button class="chip" data-from="${p.id}" title="${esc(p.name)}">แผน ${p.no}</button>`).join('')}
           <button class="chip ghostchip" data-from="">ล้างทั้งหมด</button></div>
+        <details class="sug" id="sugBox" ${state.sug && state.sug.open ? 'open' : ''}>
+          <summary>ช่วยแนะนำสัดส่วน — กำหนดผลตอบแทนที่ต้องการ และ Max Drawdown ที่รับได้</summary>
+          <div class="sug-in">
+            <label>ผลตอบแทนเฉลี่ยต่อปี (1Y Rolling Avg) ประมาณ
+              <span class="sfield"><input type="number" id="sRet" step="0.5" min="0" value="${esc((state.sug || {}).ret ?? '5')}"><em>%</em></span></label>
+            <label>Max Drawdown ไม่เกิน
+              <span class="sfield"><b>−</b><input type="number" id="sDD" step="1" min="0" value="${esc((state.sug || {}).dd ?? '10')}"><em>%</em></span></label>
+            <button class="btn" id="sGo">แนะนำสัดส่วน</button>
+          </div>
+          <div id="sOut"></div>
+        </details>
         <div class="alloc"><div class="alloc-bar"><i id="allocFill"></i></div><div class="alloc-txt" id="allocTxt"></div></div>
         <div class="groups">
           ${GROUPS.map(g => `<div><div class="grp">${g.label}</div>` + g.models.filter(m => DATA.csv.models[m]).map(m => `
@@ -828,6 +899,29 @@ function renderInput(err){
     const setW = (m, v) => { v = Math.max(0, Math.min(100, v)); if (v > 0) raw[m] = v; else delete raw[m]; app.querySelector('#w-' + m).value = v > 0 ? v : ''; refresh(); };
     app.querySelectorAll('input[data-m]').forEach(inp => inp.oninput = () => { const v = inp.value === '' ? 0 : +inp.value; if (v > 0) raw[inp.dataset.m] = v; else delete raw[inp.dataset.m]; refresh(); });
     app.querySelectorAll('[data-step]').forEach(b => b.onclick = () => setW(b.dataset.step, (+raw[b.dataset.step] || 0) + +b.dataset.d));
+  }
+  if (isDiy){
+    state.sug = state.sug || {};
+    const box = app.querySelector('#sugBox'); box.ontoggle = () => { state.sug.open = box.open; };
+    app.querySelector('#sRet').oninput = e => { state.sug.ret = e.target.value; };
+    app.querySelector('#sDD').oninput = e => { state.sug.dd = e.target.value; };
+    const showSug = () => {
+      const out = app.querySelector('#sOut'), ret = parseFloat(state.sug.ret ?? 5), dd = parseFloat(state.sug.dd ?? 10), amt = Math.max(parseFloat(state.amount) || 0, MIN_PLAN);
+      if (!(ret >= 0) || !(dd > 0)){ out.innerHTML = '<div class="hint">กรอกผลตอบแทนและ Max Drawdown ที่รับได้</div>'; return; }
+      const r = suggestMixes(ret / 100, dd / 100, amt);
+      if (!r.list || !r.list.length){ out.innerHTML = '<div class="hint">ข้อมูลไม่พอสำหรับการแนะนำ</div>'; return; }
+      state.sug.last = r;
+      const best = r.list[0], far = r.fits && Math.abs(best.avg - ret / 100) > 0.005;
+      out.innerHTML = `${r.fits ? '' : `<div class="sug-warn">ไม่มีสัดส่วนไหนที่ Max Drawdown ไม่เกิน ${fmtNum(dd)}% — แสดงสัดส่วนที่ลงน้อยที่สุดแทน</div>`}
+        ${far ? `<div class="sug-warn">${best.avg < ret / 100 ? `ภายใต้ Max Drawdown ไม่เกิน ${fmtNum(dd)}% ผลตอบแทนเฉลี่ยสูงสุดที่เคยทำได้ประมาณ ${pct(best.avg)} — ถ้าต้องการ ${fmtNum(ret)}% ต้องรับ Drawdown ได้มากขึ้น` : `ผลตอบแทนต่ำสุดที่ใกล้ ${fmtNum(ret)}% คือ ${pct(best.avg)}`}</div>` : ''}
+        <div class="sug-list">${r.list.map((o, i) => `<div class="sug-card">
+          <div class="sug-mix">${Object.entries(o.w).map(([m, x]) => `<span><b>${m}</b> ${x}%</span>`).join('')}</div>
+          <div class="sug-stat"><span>1Y Avg <b class="${cls(o.avg)}">${pct(o.avg)}</b></span><span>Total <b class="${cls(o.total)}">${pct(o.total)}</b></span><span>Max DD <b class="neg">${pct(o.mdd)}</b></span></div>
+          <button class="chip" data-use="${i}">ใช้สัดส่วนนี้</button></div>`).join('')}</div>
+        <div class="hint" style="margin-top:6px">คำนวณจากผลการดำเนินงานในอดีต ${thMonYear(r.from)} – ${thMonYear(r.to)} · ทดลองสัดส่วนทีละ 10% สูงสุด 4 โมเดล และขั้นต่ำ 5 แสนบาทต่อโมเดล · ไม่ใช่การรับประกันผลตอบแทน</div>`;
+      out.querySelectorAll('[data-use]').forEach(b => b.onclick = () => { state.weights.diy = {...r.list[+b.dataset.use].w}; state.sug.open = true; renderInput(); });
+    };
+    app.querySelector('#sGo').onclick = () => { const out = app.querySelector('#sOut'); out.innerHTML = '<div class="hint">กำลังคำนวณ…</div>'; setTimeout(showSug, 30); };
   }
   app.querySelector('#goBtn').onclick = () => { if (!inputValid().length){ state.view = 'result'; render(); window.scrollTo(0, 0); } };
   refresh();
