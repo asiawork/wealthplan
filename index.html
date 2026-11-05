@@ -179,6 +179,15 @@ button,input,select{font-family:inherit;font-size:inherit;color:inherit}
 .sum-list span:last-child{min-width:62px}
 .sum-list .low span{color:var(--neg);font-weight:600}
 .btn.full{width:100%}
+.qr{border-bottom:3px solid var(--navy)}
+.qr-h{background:var(--navy);color:#fff;text-align:center;font-family:var(--head);font-weight:600;font-size:15px;padding:7px}
+.qr-row{display:grid;grid-template-columns:44% 56%;align-items:center;min-height:48px;border-bottom:1px solid #8b93a3;font-size:12.5px;text-align:center;line-height:1.2}
+.qr-row:last-of-type{border-bottom:0}
+.qr-row b{font-family:var(--head);font-weight:600;font-size:18px;font-variant-numeric:tabular-nums;display:block}
+.qr-row .big b{font-size:26px}
+.qr-row small{display:block;font-size:10.5px;color:#333;margin-top:1px}
+.qr-empty{padding:14px 6px;text-align:center;font-size:12.5px;color:var(--muted)}
+.qr-note{font-size:11px;color:var(--muted);margin-top:-4px;line-height:1.45}
 .todo{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:5px;font-size:12.5px;line-height:1.45}
 .todo li{position:relative;padding-left:18px;color:var(--neg)}
 .todo li::before{content:'!';position:absolute;left:0;top:1px;width:13px;height:13px;border-radius:50%;background:var(--neg);color:#fff;font-size:9.5px;font-weight:700;display:grid;place-items:center}
@@ -692,6 +701,23 @@ function miniDonut(ms, raw){
     a0 = a1; });
   return `<svg viewBox="0 0 100 100" class="mdonut">${out}</svg>`;
 }
+/* rough return preview for the summary panel: 1Y rolling average and total return (dividend included) */
+function quickReturn(raw, ms, sum){
+  const head = `<div class="qr-h">Return</div>`;
+  if (!ms.length || Math.abs(sum - 100) > 1e-6 || ms.some(m => !FULL.models[m]))
+    return `<div class="qr">${head}<div class="qr-empty">จัดสัดส่วนให้ครบ 100% เพื่อดูผลตอบแทน</div></div>`;
+  const w = Object.fromEntries(ms.map(m => [m, +raw[m] / 100]));
+  const s = WP.portfolio(FULL, w, state.start, state.end);
+  if (s.dates.length < 30) return '';
+  const roll = WP.rolling1y(s).map(x => x.r), avg = roll.length ? roll.reduce((a, b) => a + b, 0) / roll.length : null;
+  const total = s.nav[s.nav.length - 1] / s.nav[0] - 1, years = WP.daysBetween(s.dates[0], s.dates[s.dates.length - 1]) / 365.25;
+  const dy = ms.reduce((a, m) => a + (DIV_YIELD[m] || 0) * w[m], 0), yrs = Math.max(1, Math.floor(years + 0.02));
+  const v = (x, d) => `<b class="${cls(x)}">${pct(x)}</b>${d ? `<small>(เงินปันผล ${pct(d)})</small>` : ''}`;
+  return `<div class="qr">${head}
+    <div class="qr-row"><span>1Y Rolling<br>Average</span><span class="big">${avg == null ? '—' : v(avg + dy, dy)}</span></div>
+    <div class="qr-row"><span>${yrs}Y<br>Total Return</span><span>${v(total + dy * years, dy * years)}</span></div>
+    </div><div class="qr-note">ผลการดำเนินงานย้อนหลัง ${thMonYear(s.dates[0])} – ${thMonYear(s.dates[s.dates.length - 1])} · ดู Drawdown และรายละเอียดอื่นในหน้าผลลัพธ์</div>`;
+}
 function renderInput(err){
   const isDiy = state.plan === 'diy', raw = state.weights.diy;
   app.innerHTML = `
@@ -757,6 +783,7 @@ function renderInput(err){
     <aside class="sumcard" aria-live="polite">
       <div class="sum-h">สรุปพอร์ต</div>
       <div id="sumBody"></div>
+      <div id="sumRet"></div>
       <button class="btn big full" id="goBtn">ดูผลลัพธ์ →</button>
       <ul class="todo" id="todo"></ul>
     </aside>
@@ -774,6 +801,7 @@ function renderInput(err){
         ${meta.risk ? `<span class="sum-risk">${riskMeter(RISK_NUM(meta.risk)) + esc(meta.risk)}</span>` : ''}</div>
       <div class="sum-main">${miniDonut(ms, w)}<div><div class="sum-amt">${amt > 0 ? fmtMoney(amt) : '—'}</div><div class="muted">ล้านบาท</div></div></div>
       <div class="sum-list">${ms.length ? ms.map(m => `<div class="${low.has(m) ? 'low' : ''}"><i style="background:${col[m]}"></i><b>${m}</b><span>${fmtNum(+w[m])}%</span><span>${amt > 0 ? fmtMoney(amt * w[m] / 100) + ' ลบ.' : ''}</span></div>`).join('') : '<div class="muted">ยังไม่ได้ใส่สัดส่วน</div>'}</div>`;
+    app.querySelector('#sumRet').innerHTML = quickReturn(w, ms, sum);
     const errs = inputValid();
     app.querySelector('#goBtn').disabled = errs.length > 0;
     app.querySelector('#todo').innerHTML = errs.length ? errs.map(x => `<li>${esc(x)}</li>`).join('') : '<li class="ok">ข้อมูลครบ พร้อมดูผลลัพธ์</li>';
