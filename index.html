@@ -104,7 +104,9 @@ button,input,select{font-family:inherit;font-size:inherit;color:inherit}
 .dtag{background:var(--navy);color:#fff;font-size:11.5px;font-weight:700;letter-spacing:.5px;border-radius:5px;padding:2px 7px}
 .orline{display:flex;align-items:center;gap:10px;margin:16px 0 10px;font-size:12.5px;color:var(--muted)}
 .orline::before,.orline::after{content:'';flex:1;height:1px;background:var(--line)}
-.plans .plan{padding:11px 12px}
+.plans .plan{padding:12px 14px}
+.plan .pnum{font-family:var(--head);font-size:15px;font-weight:700;color:var(--navy)}
+.plan[aria-checked="true"] .pnum{color:var(--accent)}
 .plans .plan .pname{font-size:14.5px}
 .plans .plan .pmix{font-size:12px}
 .ptop{display:flex;align-items:center;gap:8px}
@@ -698,10 +700,9 @@ function renderInput(err){
           ${PLANS.filter(p => p.no).map(p => {
             const on = p.id === state.plan, ms = MODEL_ORDER.filter(m => +p.w[m] > 0);
             return `<button class="plan" role="radio" aria-checked="${on}" data-plan="${p.id}">
-              <span class="ptop"><span class="pno">แผน ${p.no}</span>${riskMeter(RISK_NUM(p.risk))}</span>
+              <span class="pnum">แผน ${p.no}</span>
               <span class="pname">${esc(p.name)}</span>
               <span class="prisk">${esc(p.risk)}</span>
-              <span class="pmix">${ms.map(m => `<b>${m}</b><span>${p.w[m]}%</span>`).join('')}</span>
             </button>`; }).join('')}
         </div>
         <div class="orline"><span>หรือจัดพอร์ตเอง</span></div>
