@@ -453,6 +453,24 @@ async function handleFiles(files){
   render(err);
 }
 const BACKFILL = window.WP_BACKFILL || null;
+const PLANNAV = window.WP_PLANNAV || null;
+/* plans 1-5: research NAV up to the cutoff, then continued from the CSV portfolio */
+function planSeries(id, w, start, end){
+  const PN = PLANNAV, cut = PN.cutoff, arr = PN.plans[id], dates = [], nav = [];
+  if (start <= cut){
+    for (let i = 0; i < PN.dates.length; i++){
+      const d = PN.dates[i]; if (d < start || d > end || d > cut || arr[i] == null) continue;
+      dates.push(d); nav.push(arr[i]);
+    }
+  }
+  const from = dates.length ? dates[dates.length - 1] : start;
+  if (end > from){
+    const tail = WP.portfolio(FULL, w, from, end);
+    const base = nav.length ? nav[nav.length - 1] : 1;
+    tail.dates.forEach((d, k) => { if (!dates.length || d > dates[dates.length - 1]){ dates.push(d); nav.push(base * tail.nav[k] / tail.nav[0]); } });
+  }
+  const b = nav[0]; return {dates, nav: nav.map(v => v / b)};
+}
 function prepare(){ FULL = DATA && DATA.csv ? WP.buildFull(DATA.csv, BACKFILL) : null; }
 const lastDate = () => DATA.csv.dates[DATA.csv.dates.length-1];
 
@@ -490,7 +508,8 @@ function compute(){
   const w = Object.fromEntries(models.filter(m => +raw[m] > 0).map(m => [m, +raw[m]/100]));
   const missing = Object.keys(w).filter(m => !FULL.models[m]);
   if (missing.length){ res.missing = missing; return res; }
-  const pf = WP.portfolio(FULL, w, state.start, state.end);
+  const pf = PLANNAV && PLANNAV.plans[state.plan] ? planSeries(state.plan, w, state.start, state.end) : WP.portfolio(FULL, w, state.start, state.end);
+  res.research = !!(PLANNAV && PLANNAV.plans[state.plan] && pf.dates[0] <= PLANNAV.cutoff);
   if (pf.dates.length < 30){ res.short = true; return res; }
   const start = pf.dates[0], end = pf.dates[pf.dates.length-1];
   const thr = Object.entries(w).reduce((a,[m,x]) => a + MODEL_INFO[m].filter*x, 0) / 100;
@@ -1015,6 +1034,7 @@ function noteHTML(r){
   parts.push(`<b>Median</b> Drawdown ${pct(p.cycDDMedian)} · Recovery ${rl(p.recMedian)} — คิดจาก ${p.nCycles.toLocaleString()} cycle (วันที่ถ้าเข้าลงทุนแล้วพอร์ตลงเกิน ${thr}% ภายใน 84 วันทำการ)`);
   if (m && m.dd < 0) parts.push(`<b>Max</b> Drawdown ${pct(m.dd)} — จุดสูงสุด ${thDate(m.peak)} → ต่ำสุด ${thDate(m.trough)} → `
     + (m.recovered ? `กลับถึงจุดสูงสุดเดิม ${thDate(m.rec)} · <b>Recovery ${rl(m.days)}</b>` : `<b>ยังไม่กลับถึงจุดสูงสุดเดิม</b> (ผ่านมาแล้ว ${rl(m.days)})`));
+  if (r.research) parts.push(`ตัวเลขระดับพอร์ตใช้ NAV ของแผนจากทีม Research ถึง ${thDate(PLANNAV.cutoff)}${r.end > PLANNAV.cutoff ? ' แล้วต่อด้วยข้อมูล Model Performance' : ''} · ตารางรายโมเดลคำนวณจาก Model Performance`);
   if (r.div) parts.push(`รวมเงินปันผล DAA ${(DIV_YIELD.DAA*100).toFixed(1)}% ต่อปี (บวกแบบไม่ทบต้น) ใน Total Return และ 1Y Rolling Average เท่านั้น · กราฟและ Drawdown ไม่รวมปันผล`);
   if (r.backfilled.length && BACKFILL) parts.push('ใช้ผลทดสอบย้อนหลังสำหรับ ' + r.backfilled.map(b => `${b.m} ก่อน ${thDate(b.from)}`).join(' และ '));
   return parts.join('<br>');

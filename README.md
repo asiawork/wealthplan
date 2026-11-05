@@ -11,7 +11,7 @@ The CSV stays in your browser. It is not uploaded to this repository.
 
 ## Files
 - `index.html` — the page (calculation engine included)
-- `backfill.js` — back-tested history for **FIXEDTDP before 2022-05-03** and **TCT before 2022-09-01** only. Everything after those dates comes from the CSV.
+- `backfill.js` — back-tested history for **FIXEDTDP before 2022-05-03** and **TCT before 2022-09-01** only (the part the CSV doesn't have), derived from the research team's 260703 workbook. Everything after those dates comes from the CSV.
 - `fonts/` (optional) — add `BLS-Bold.ttf`, `BLS-Regular.ttf`, `BLS_Text-Regular.ttf`, `BLS_Text-Bold.ttf` to use the company fonts; otherwise Kanit is used.
 
 ## Method
