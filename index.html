@@ -89,13 +89,23 @@ button,input,select{font-family:inherit;font-size:inherit;color:inherit}
 .chip[aria-pressed="true"]{background:var(--navy);border-color:var(--navy);color:#fff}
 .ghostchip{color:var(--muted)}
 .baht{margin-top:6px;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;min-height:1em}
-.plans{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.plans{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+@media (max-width:1180px){.plans{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media (max-width:760px){.plans{grid-template-columns:minmax(0,1fr)}}
 .plan{display:flex;flex-direction:column;align-items:stretch;gap:3px;text-align:left;background:#fff;border:1.5px solid var(--line);border-radius:12px;padding:13px 15px;cursor:pointer;min-width:0;position:relative}
 .plan:hover{border-color:#9aa6bb}
 .plan[aria-checked="true"]{border-color:var(--navy);box-shadow:inset 0 0 0 1.5px var(--navy);background:#f6f8fb}
 .plan[aria-checked="true"]::after{content:'✓';position:absolute;top:10px;right:12px;width:20px;height:20px;border-radius:50%;background:var(--navy);color:#fff;font-size:12px;display:grid;place-items:center}
-.plan.diy{border-style:dashed}
+.plan.diy{border-style:solid}
+.plan.hero{width:100%;padding:16px 18px;border-width:2px}
+.plan.hero .pname{font-size:19px}
+.plan.hero .prisk{font-size:13px}
+.plan.hero[aria-checked="false"]{border-color:var(--accent);border-style:dashed}
+.orline{display:flex;align-items:center;gap:10px;margin:16px 0 10px;font-size:12.5px;color:var(--muted)}
+.orline::before,.orline::after{content:'';flex:1;height:1px;background:var(--line)}
+.plans .plan{padding:11px 12px}
+.plans .plan .pname{font-size:14.5px}
+.plans .plan .pmix{font-size:12px}
 .ptop{display:flex;align-items:center;gap:8px}
 .plan .pno{font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.3px}
 .plan[aria-checked="true"] .pno{color:var(--accent)}
@@ -143,6 +153,7 @@ button,input,select{font-family:inherit;font-size:inherit;color:inherit}
 .sum-amt{font-family:var(--head);font-size:30px;font-weight:700;color:var(--navy);line-height:1;font-variant-numeric:tabular-nums}
 .sum-list{display:flex;flex-direction:column;gap:4px;font-size:13px;font-variant-numeric:tabular-nums}
 .sum-list>div{display:grid;grid-template-columns:12px 1fr auto auto;gap:8px;align-items:center}
+.sum-list>div.muted{display:block}
 .sum-list i{width:10px;height:10px;border-radius:2px;display:inline-block}
 .sum-list span{text-align:right;color:var(--muted)}
 .sum-list span:last-child{min-width:62px}
@@ -493,7 +504,7 @@ const PAL = ['var(--c1)','var(--c2)','var(--c3)','var(--c4)','var(--c5)','var(--
 let DATA = null;      // {csv, backfill, csvName, xlsxName, savedAt}
 let FULL = null;
 const state = {
-  plan:'p1',
+  plan:'diy',
   weights: Object.fromEntries(PLANS.map(p => [p.id, {...p.w}])),
   meta: {diy:{name:'Wealth Solution Plan', risk:''}},
   view:'input',
@@ -683,25 +694,23 @@ function renderInput(err){
       </section>
 
       <section class="step">
-        <div class="step-h"><span class="num">2</span><h2>เลือกแผน</h2><span class="step-note">เรียงจากความเสี่ยงต่ำไปสูง</span></div>
-        <div class="plans" role="radiogroup" aria-label="เลือกแผน">
-          ${PLANS.map(p => {
-            const on = p.id === state.plan;
-            if (!p.no) return `<button class="plan diy" role="radio" aria-checked="${on}" data-plan="diy">
-                <span class="ptop"><span class="pno">DIY</span></span>
-                <span class="pname">Wealth Solution Plan</span>
-                <span class="prisk">จัดสัดส่วนเองตามความต้องการของลูกค้า</span>
-                <span class="pstat">เลือกโมเดลและ % ได้เอง · ขั้นต่ำ 5 แสนบาทต่อโมเดล</span></button>`;
-            const pv = planPreview(p), ms = MODEL_ORDER.filter(m => +p.w[m] > 0);
+        <div class="step-h"><span class="num">2</span><h2>เลือกรูปแบบพอร์ต</h2></div>
+        <button class="plan diy hero" role="radio" aria-checked="${isDiy}" data-plan="diy">
+          <span class="ptop"><span class="pno">จัดพอร์ตเอง</span></span>
+          <span class="pname">Wealth Solution Plan</span>
+          <span class="prisk">เลือกโมเดลและสัดส่วนให้ตรงกับลูกค้า · เริ่มจากสัดส่วนของแผนสำเร็จรูปแล้วปรับต่อได้</span>
+        </button>
+        <div class="orline"><span>หรือใช้แผนสำเร็จรูป</span></div>
+        <div class="plans" role="radiogroup" aria-label="แผนสำเร็จรูป">
+          ${PLANS.filter(p => p.no).map(p => {
+            const on = p.id === state.plan, ms = MODEL_ORDER.filter(m => +p.w[m] > 0);
             return `<button class="plan" role="radio" aria-checked="${on}" data-plan="${p.id}">
               <span class="ptop"><span class="pno">แผน ${p.no}</span>${riskMeter(RISK_NUM(p.risk))}</span>
               <span class="pname">${esc(p.name)}</span>
               <span class="prisk">${esc(p.risk)}</span>
               <span class="pmix">${ms.map(m => `<b>${m}</b><span>${p.w[m]}%</span>`).join('')}</span>
-              <span class="pstat"><span>${pv.yrs} ปี <b class="${cls(pv.total)}">${pct(pv.total)}</b></span><span>ลงลึกสุด <b class="neg">${pct(pv.mdd)}</b></span></span>
             </button>`; }).join('')}
         </div>
-        <div class="hint" style="margin-top:8px">ตัวเลขในการ์ดคำนวณช่วง ${thMonYear(state.start)} – ${thMonYear(state.end)} (ผลการดำเนินงานในอดีต)</div>
       </section>
 
       ${isDiy ? `
