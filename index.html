@@ -190,11 +190,19 @@ button,input,select{font-family:inherit;font-size:inherit;color:inherit}
 .qr .qr-empty{grid-column:1/-1}
 .qr-empty{padding:14px 6px;text-align:center;font-size:12.5px;color:var(--muted);border-bottom:3px solid var(--navy)}
 .qr-note{font-size:11px;color:var(--muted);margin-top:6px;line-height:1.45}
-.sug{border:1.5px solid var(--accent);border-radius:12px;background:#f5f8fd;margin:14px 0 6px;padding:0 16px}
-.sug summary{cursor:pointer;padding:12px 0;font-weight:600;color:var(--accent);list-style:none}
+.sug{border:0;border-radius:12px;background:#f5f8fd;margin:14px 0 6px;overflow:hidden;box-shadow:0 0 0 1.5px var(--accent) inset}
+.sug summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:12px;background:var(--accent);color:#fff;padding:13px 16px}
+.sug summary:hover{background:#1a52a8}
 .sug summary::-webkit-details-marker{display:none}
-.sug summary::before{content:'＋ ';}
-.sug[open] summary::before{content:'－ ';}
+.sug-ico{width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,.2);display:grid;place-items:center;font-size:15px;flex:0 0 auto}
+.sug-t{display:flex;flex-direction:column;gap:1px;flex:1;min-width:0}
+.sug-t b{font-family:var(--head);font-size:15.5px;font-weight:700}
+.sug-t small{font-size:12px;opacity:.85}
+.sug-arrow{font-size:16px;transition:transform .2s}
+.sug[open] .sug-arrow{transform:rotate(180deg)}
+.sug>:not(summary){margin-left:16px;margin-right:16px}
+.sug-in{padding-top:14px}
+@media (prefers-reduced-motion:reduce){.sug-arrow{transition:none}}
 .sug-in{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:flex-end;padding-bottom:12px}
 .sug-in label{display:flex;flex-direction:column;gap:4px;font-size:12.5px;color:var(--muted)}
 .sfield{display:inline-flex;align-items:center;gap:4px;font-size:15px;color:var(--ink)}
@@ -824,7 +832,7 @@ function renderInput(err){
           ${PLANS.filter(p => p.no).map(p => `<button class="chip" data-from="${p.id}" title="${esc(p.name)}">แผน ${p.no}</button>`).join('')}
           <button class="chip ghostchip" data-from="">ล้างทั้งหมด</button></div>
         <details class="sug" id="sugBox" ${state.sug && state.sug.open ? 'open' : ''}>
-          <summary>ช่วยแนะนำสัดส่วน — กำหนดผลตอบแทนที่ต้องการ และ Max Drawdown ที่รับได้</summary>
+          <summary><span class="sug-ico" aria-hidden="true">✦</span><span class="sug-t"><b>กำหนดสัดส่วนจากผลตอบแทนและผลขาดทุนที่รับได้</b><small>ใส่ผลตอบแทนที่ต้องการ และ Max Drawdown ที่ลูกค้ารับได้ ระบบจะแนะนำสัดส่วนให้</small></span><span class="sug-arrow" aria-hidden="true">▾</span></summary>
           <div class="sug-in">
             <label>ผลตอบแทนเฉลี่ยต่อปี (1Y Rolling Avg) ประมาณ
               <span class="sfield"><input type="number" id="sRet" step="0.5" min="0" value="${esc((state.sug || {}).ret ?? '5')}"><em>%</em></span></label>
