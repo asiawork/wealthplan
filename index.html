@@ -179,6 +179,24 @@ button,input,select{font-family:inherit;font-size:inherit;color:inherit}
 .sum-list span:last-child{min-width:62px}
 .sum-list .low span{color:var(--neg);font-weight:600}
 .btn.full{width:100%}
+.period{background:#fff;border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.periodwrap{flex:1 1 640px;min-width:0}
+.period-h{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px}
+.period-h span{font-size:12.5px;color:var(--muted)}
+.period-h b{font-family:var(--head);font-size:16px;color:var(--navy);font-variant-numeric:tabular-nums}
+.period-h em{font-style:normal;font-size:12px;color:#fff;background:var(--navy);border-radius:999px;padding:1px 8px}
+.period-opts{display:flex;flex-wrap:wrap;gap:6px}
+.period-opts button{display:inline-flex;flex-direction:column;align-items:center;border:1.5px solid var(--line);background:#fff;border-radius:9px;padding:5px 11px;cursor:pointer;font-size:13px;color:var(--navy);line-height:1.2}
+.period-opts button small{font-size:10.5px;color:var(--muted)}
+.period-opts button:hover{border-color:var(--navy)}
+.period-opts button[aria-checked="true"]{background:var(--navy);border-color:var(--navy);color:#fff;font-weight:600}
+.period-opts button[aria-checked="true"] small{color:#c9d2e3}
+.period-custom{display:flex;flex-wrap:wrap;gap:8px 14px;font-size:13px;color:var(--muted)}
+[hidden]{display:none !important}
+.period-custom input{border:1.5px solid var(--line);border-radius:8px;padding:5px 8px;color:var(--ink)}
+.period.compact{padding:10px;border-radius:10px}
+.period.compact .period-h b{font-size:14px}
+.period.compact .period-opts button{padding:4px 8px;font-size:12px}
 .qr{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .qr-col{border-bottom:3px solid var(--navy);min-width:0}
 .qr-h{background:var(--navy);color:#fff;text-align:center;font-family:var(--head);font-weight:600;font-size:13px;padding:6px 4px}
@@ -586,7 +604,7 @@ async function handleFiles(files){
   else {
     try{
       DATA = {csv: WP.parseModelCSV(await f.text()), csvName: f.name, savedAt: new Date().toISOString()};
-      save(); prepare(); state.start = SLIDE_PERIOD.start; state.end = lastDate(); state.view = 'input';
+      save(); prepare(); setPeriod(state.period || 'all'); state.view = 'input';
     }catch(e){ err = e.message; }
   }
   render(err);
@@ -750,7 +768,7 @@ function quickReturn(raw, ms, sum){
         <div class="qr-row"><span>Median</span>${v(st.cycDDMedian)}</div>
         <div class="qr-row"><span>Max</span>${v(st.maxDD)}</div></div>
     </div>
-    <div class="qr-note">ผลการดำเนินงานย้อนหลัง ${thMonYear(s.dates[0])} – ${thMonYear(s.dates[s.dates.length - 1])} · ดูรายละเอียดทั้งหมดในหน้าผลลัพธ์</div>`;
+    <div class="qr-note">ผลการดำเนินงานในอดีต · ดูรายละเอียดทั้งหมดในหน้าผลลัพธ์</div>`;
 }
 
 /* ---------- suggest a DIY mix: target 1Y avg return, max drawdown limit ---------- */
@@ -862,6 +880,7 @@ function renderInput(err){
     <aside class="sumcard" aria-live="polite">
       <div class="sum-h">สรุปพอร์ต</div>
       <div id="sumBody"></div>
+      <div id="sumPeriod"></div>
       <div id="sumRet"></div>
       <button class="btn big full" id="goBtn">ดูผลลัพธ์ →</button>
       <ul class="todo" id="todo"></ul>
@@ -880,6 +899,8 @@ function renderInput(err){
         ${meta.risk ? `<span class="sum-risk">${riskMeter(RISK_NUM(meta.risk)) + esc(meta.risk)}</span>` : ''}</div>
       <div class="sum-main">${miniDonut(ms, w)}<div><div class="sum-amt">${amt > 0 ? fmtMoney(amt) : '—'}</div><div class="muted">ล้านบาท</div></div></div>
       <div class="sum-list">${ms.length ? ms.map(m => `<div class="${low.has(m) ? 'low' : ''}"><i style="background:${col[m]}"></i><b>${m}</b><span>${fmtNum(+w[m])}%</span><span>${amt > 0 ? fmtMoney(amt * w[m] / 100) + ' ลบ.' : ''}</span></div>`).join('') : '<div class="muted">ยังไม่ได้ใส่สัดส่วน</div>'}</div>`;
+    const spb = app.querySelector('#sumPeriod'); spb.innerHTML = periodHTML(true);
+    bindPeriod(spb, () => refresh());
     app.querySelector('#sumRet').innerHTML = quickReturn(w, ms, sum);
     const errs = inputValid();
     app.querySelector('#goBtn').disabled = errs.length > 0;
@@ -935,6 +956,40 @@ function renderInput(err){
   refresh();
 }
 
+/* ---------- period picker (shared by both pages) ---------- */
+const firstDate = () => DATA.csv.dates[0];
+const PERIODS = [
+  {id:'all',   label:'ตั้งแต่เริ่ม – ล่าสุด', range: () => [firstDate(), lastDate()]},
+  {id:'slide', label:'เม.ย. 2019 – เม.ย. 2026', sub:'ตามสไลด์', range: () => [SLIDE_PERIOD.start, SLIDE_PERIOD.end]},
+  {id:'5y',    label:'5 ปีล่าสุด', range: () => [WP.edate(lastDate(), -60), lastDate()]},
+  {id:'3y',    label:'3 ปีล่าสุด', range: () => [WP.edate(lastDate(), -36), lastDate()]},
+  {id:'1y',    label:'1 ปีล่าสุด', range: () => [WP.edate(lastDate(), -12), lastDate()]},
+  {id:'custom',label:'กำหนดเอง'},
+];
+function setPeriod(id){
+  state.period = id; const p = PERIODS.find(x => x.id === id);
+  if (p && p.range){ [state.start, state.end] = p.range(); if (state.start < firstDate()) state.start = firstDate(); }
+}
+function periodHTML(compact){
+  const yrs = WP.daysBetween(state.start, state.end) / 365.25, cur = state.period || 'all';
+  return `<div class="period${compact ? ' compact' : ''}">
+    <div class="period-h"><span>ช่วงผลตอบแทน</span><b>${thDate(state.start)} – ${thDate(state.end)}</b><em>${yrs >= 1 ? yrs.toFixed(1) + ' ปี' : Math.round(yrs * 12) + ' เดือน'}</em></div>
+    <div class="period-opts" role="radiogroup" aria-label="ช่วงผลตอบแทน">
+      ${PERIODS.map(p => `<button role="radio" aria-checked="${p.id === cur}" data-period="${p.id}">${p.label}${p.sub ? `<small>${p.sub}</small>` : ''}</button>`).join('')}
+    </div>
+    <div class="period-custom" ${cur === 'custom' ? '' : 'hidden'}>
+      <label>ตั้งแต่ <input type="date" class="pStart" value="${state.start}" min="${firstDate()}" max="${lastDate()}"></label>
+      <label>ถึง <input type="date" class="pEnd" value="${state.end}" min="${firstDate()}" max="${lastDate()}"></label>
+    </div>
+  </div>`;
+}
+function bindPeriod(root, onChange){
+  root.querySelectorAll('[data-period]').forEach(b => b.onclick = () => { setPeriod(b.dataset.period); onChange(); });
+  const s = root.querySelector('.pStart'), e = root.querySelector('.pEnd');
+  if (s) s.onchange = () => { if (s.value && s.value < state.end){ state.start = s.value; onChange(); } };
+  if (e) e.onchange = () => { if (e.value && e.value > state.start){ state.end = e.value; onChange(); } };
+}
+
 /* ---------- step 2: result ---------- */
 function renderResult(err){
   const plan = PLANS.find(p => p.id === state.plan), meta = planMeta(plan);
@@ -948,14 +1003,7 @@ function renderResult(err){
         <span>${ms.map(m => `${m} ${raw[m]}%`).join(' · ')}</span></div>
     </div>
     <div class="controls">
-      <div class="range">
-        <span>ช่วงข้อมูล</span>
-        <input type="date" id="dStart" value="${state.start}" min="${DATA.csv.dates[0]}" max="${lastDate()}">
-        <span>ถึง</span>
-        <input type="date" id="dEnd" value="${state.end}" min="${DATA.csv.dates[0]}" max="${lastDate()}">
-        <button class="btn ghost" id="pSlide">เม.ย. 2019 – เม.ย. 2026</button>
-        <button class="btn ghost" id="pLatest">ถึงข้อมูลล่าสุด</button>
-      </div>
+      <div id="periodBox" class="periodwrap"></div>
       <div class="range" style="margin-left:auto">
         <button class="btn" id="pngBtn">บันทึกรูป (PNG)</button>
         <button class="btn" id="pptBtn">ดาวน์โหลด PowerPoint</button>
@@ -968,11 +1016,9 @@ function renderResult(err){
       <section class="eq" id="eq" aria-label="Equity curve"></section>
     </div>`;
   app.querySelector('#backBtn').onclick = () => { state.view = 'input'; render(); window.scrollTo(0, 0); };
-  const ds = app.querySelector('#dStart'), de = app.querySelector('#dEnd');
-  ds.onchange = () => { if (ds.value){ state.start = ds.value; update(); } };
-  de.onchange = () => { if (de.value){ state.end = de.value; update(); } };
-  app.querySelector('#pSlide').onclick = () => { state.start = SLIDE_PERIOD.start; state.end = SLIDE_PERIOD.end; ds.value = state.start; de.value = state.end; update(); };
-  app.querySelector('#pLatest').onclick = () => { state.start = SLIDE_PERIOD.start; state.end = lastDate(); ds.value = state.start; de.value = state.end; update(); };
+  const pb = app.querySelector('#periodBox');
+  const drawPeriod = () => { pb.innerHTML = periodHTML(false); bindPeriod(pb, () => { drawPeriod(); update(); }); };
+  drawPeriod();
   app.querySelector('#pngBtn').onclick = exportPNG;
   app.querySelector('#pptBtn').onclick = exportPPTX;
   update();
@@ -1509,7 +1555,7 @@ if (window.ResizeObserver) new ResizeObserver(fit).observe(document.body);
 
 /* boot */
 DATA = load();
-if (DATA && DATA.csv){ prepare(); state.start = SLIDE_PERIOD.start; state.end = lastDate(); }
+if (DATA && DATA.csv){ prepare(); setPeriod('all'); }
 render();
 </script>
 </body>
