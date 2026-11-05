@@ -29,6 +29,20 @@ button,input,select{font-family:inherit;font-size:inherit;color:inherit}
 .topbar h1{font-family:var(--head);font-size:20px;margin:0;color:var(--navy);font-weight:700}
 .datainfo{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:13px;color:var(--muted)}
 .chip{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--line);border-radius:999px;padding:4px 12px}
+.uppop{position:relative}
+.upbtn{display:inline-flex;align-items:center;gap:8px;border:2px solid var(--navy);background:#fff;color:var(--navy);border-radius:10px;padding:8px 16px;font-weight:600;font-size:14px;cursor:pointer;box-shadow:0 1px 0 rgba(22,35,58,.08)}
+.upbtn:hover,.upbtn[aria-expanded="true"]{background:#f3f5f9}
+.uppanel{position:absolute;right:0;top:calc(100% + 10px);width:min(360px,calc(100vw - 32px));background:#fff;border-radius:14px;box-shadow:0 12px 32px rgba(22,35,58,.22);padding:18px 20px;z-index:20;color:var(--ink);font-size:13.5px}
+.uppanel h3{font-family:var(--head);font-size:17px;margin:0 0 6px;color:var(--navy)}
+.uppanel p{margin:0 0 10px;color:var(--muted);line-height:1.55}
+.upsteps{margin:4px 0 14px;padding-left:20px;line-height:1.75;text-align:left}
+.upsteps b{color:var(--ink)}
+.upsteps a{color:var(--navy);font-weight:600}
+.kbd{display:inline-block;border:1px solid var(--line);border-radius:5px;padding:0 6px;font-size:12px;background:#f6f8fb;color:var(--ink)}
+.upnote{font-size:12px;color:var(--muted);margin:12px 0 0 !important;line-height:1.5}
+.uplead{color:var(--muted);max-width:520px;margin:6px auto 10px;line-height:1.55}
+.drop .upsteps{display:inline-block}
+
 .chip b{color:var(--ink);font-weight:600}
 .chip .ok{color:var(--pos)} .chip .no{color:var(--neg)}
 .btn{border:1px solid var(--navy);background:var(--navy);color:#fff;border-radius:8px;padding:7px 14px;cursor:pointer;font-weight:500}
@@ -90,6 +104,7 @@ button,input,select{font-family:inherit;font-size:inherit;color:inherit}
 .ghostchip{color:var(--muted)}
 .baht{margin-top:6px;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;min-height:1em}
 .plans{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+.plans .plan .pnum{padding-right:22px}
 @media (max-width:1180px){.plans{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media (max-width:760px){.plans{grid-template-columns:minmax(0,1fr)}}
 .plan{display:flex;flex-direction:column;align-items:stretch;gap:3px;text-align:left;background:#fff;border:1.5px solid var(--line);border-radius:12px;padding:13px 15px;cursor:pointer;min-width:0;position:relative}
@@ -107,7 +122,7 @@ button,input,select{font-family:inherit;font-size:inherit;color:inherit}
 .plans .plan{padding:12px 14px}
 .plan .pnum{font-family:var(--head);font-size:15px;font-weight:700;color:var(--navy)}
 .plan[aria-checked="true"] .pnum{color:var(--accent)}
-.plans .plan .pname{font-size:14.5px}
+.plans .plan .pname{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:0}
 .plans .plan .pmix{font-size:12px}
 .ptop{display:flex;align-items:center;gap:8px}
 .plan .pno{font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.3px}
@@ -1173,24 +1188,50 @@ const GROUPS = [
   {label:'Asset Allocation', models:['CAA','MAA','AAA','DAA']},
   {label:'หุ้นโลก', models:['TCT']},
 ];
+const TABLEAU_URL = '';   // ลิงก์ Tableau · Model Performance (ใส่ได้ภายหลัง)
+function uploadSteps(){
+  const link = TABLEAU_URL ? `<a href="${TABLEAU_URL}" target="_blank" rel="noopener">Tableau · Model Performance</a>` : '<b>Tableau · Model Performance</b>';
+  return `<ol class="upsteps">
+      <li>เปิด ${link}</li>
+      <li>เลือก<b>ทุกโมเดล</b></li>
+      <li>กด <span class="kbd">⤓ ▾</span> (Download) → <b>Data</b></li>
+      <li>กดปุ่มด้านล่าง แล้วเลือกไฟล์ที่ดาวน์โหลดมา</li>
+    </ol>`;
+}
+const UP_NOTE = 'ข้อมูลอยู่ในเบราว์เซอร์นี้เท่านั้น ไม่ถูกส่งขึ้นเว็บ · เบราว์เซอร์จะจำไฟล์ไว้ให้ใช้ครั้งต่อไป';
 function renderInfo(){
   const el = document.getElementById('datainfo');
   if (!DATA || !DATA.csv){ el.innerHTML = ''; return; }
   el.innerHTML = `
     <span class="chip">Model Performance: <b>ข้อมูลถึง ${thDate(lastDate())}</b></span>
-    <button class="btn" id="upBtn">อัปเดตไฟล์</button>`;
-  el.querySelector('#upBtn').onclick = pickFiles;
+    <div class="uppop">
+      <button class="upbtn" id="upBtn" aria-expanded="false" aria-controls="upPanel"><span aria-hidden="true">⤒</span> อัปโหลดข้อมูล Auto Top Funds</button>
+      <div class="uppanel" id="upPanel" hidden>
+        <h3>อัปโหลดข้อมูล Auto Top Funds</h3>
+        <p>หน้าเว็บนี้เป็น Public จึงไม่ได้เก็บข้อมูลโมเดล Auto Top Funds ไว้ ดาวน์โหลดไฟล์จาก Tableau แล้วนำมาใส่ที่นี่</p>
+        ${uploadSteps()}
+        <button class="btn" id="upPick">เลือกไฟล์</button>
+        <p class="upnote">หมายเหตุ: ${UP_NOTE}</p>
+      </div>
+    </div>`;
+  const btn = el.querySelector('#upBtn'), panel = el.querySelector('#upPanel');
+  const close = () => { panel.hidden = true; btn.setAttribute('aria-expanded', 'false'); };
+  btn.onclick = e => { e.stopPropagation(); panel.hidden = !panel.hidden; btn.setAttribute('aria-expanded', String(!panel.hidden)); };
+  panel.onclick = e => e.stopPropagation();
+  el.querySelector('#upPick').onclick = () => { close(); pickFiles(); };
+  document.addEventListener('click', close);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
 }
 
 function renderUpload(err){
   app.innerHTML = `
     <div class="drop" id="drop">
-      <h2>อัปโหลดข้อมูลเพื่อเริ่มใช้งาน</h2>
-      <div style="color:var(--muted)">ข้อมูลอยู่ในเบราว์เซอร์เครื่องนี้เท่านั้น ไม่ถูกส่งหรือเก็บไว้ที่อื่น</div>
-      <p style="margin:14px 0 18px">เลือกไฟล์ <b>Model Performance_data.csv</b> (ข้อมูลผลตอบแทนรายวันของแต่ละโมเดล)<br>
-      <span style="color:var(--muted);font-size:13px">ข้อมูลย้อนหลังของ FIXEDTDP และ TCT ช่วงก่อนเริ่มโมเดลมีอยู่ในหน้านี้แล้ว</span></p>
-      <button class="btn" id="pick">เลือกไฟล์ CSV</button>
+      <h2>อัปโหลดข้อมูล Auto Top Funds</h2>
+      <p class="uplead">หน้าเว็บนี้เป็น Public จึงไม่ได้เก็บข้อมูลโมเดล Auto Top Funds ไว้ ดาวน์โหลดไฟล์จาก Tableau แล้วนำมาใส่ที่นี่</p>
+      <div>${uploadSteps()}</div>
+      <div><button class="btn big" id="pick">เลือกไฟล์</button></div>
       <div class="hint">หรือลากไฟล์มาวางในกรอบนี้</div>
+      <p class="upnote">หมายเหตุ: ${UP_NOTE}</p>
       ${err ? `<div class="err">${esc(err)}</div>` : ''}
     </div>`;
   app.querySelector('#pick').onclick = pickFiles;
