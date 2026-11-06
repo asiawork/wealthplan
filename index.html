@@ -191,7 +191,8 @@ button,input,select{font-family:inherit;font-size:inherit;color:inherit}
 .period-opts button:hover{border-color:var(--navy)}
 .period-opts button[aria-checked="true"]{background:var(--navy);border-color:var(--navy);color:#fff;font-weight:600}
 .period-opts button[aria-checked="true"] small{color:#c9d2e3}
-.period-custom{display:flex;flex-wrap:wrap;gap:8px 14px;font-size:13px;color:var(--muted)}
+.period-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+.period-custom{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;font-size:13px;color:var(--muted);padding-left:14px;border-left:1.5px solid var(--line)}
 [hidden]{display:none !important}
 .period-custom input{border:1.5px solid var(--line);border-radius:8px;padding:5px 8px;color:var(--ink)}
 .period.compact{padding:10px;border-radius:10px}
@@ -971,13 +972,13 @@ function periodHTML(compact){
   const yrs = WP.daysBetween(state.start, state.end) / 365.25, cur = state.period || 'all';
   return `<div class="period${compact ? ' compact' : ''}">
     <div class="period-h"><span>ช่วงผลตอบแทน</span><b>${thDate(state.start)} – ${thDate(state.end)}</b><em>${yrs >= 1 ? yrs.toFixed(1) + ' ปี' : Math.round(yrs * 12) + ' เดือน'}</em></div>
-    <div class="period-opts" role="radiogroup" aria-label="ช่วงผลตอบแทน">
+    <div class="period-row"><div class="period-opts" role="radiogroup" aria-label="ช่วงผลตอบแทน">
       ${PERIODS.filter(p => !(compact && p.resultOnly)).map(p => `<button role="radio" aria-checked="${p.id === cur}" data-period="${p.id}">${p.label}${p.sub ? `<small>${p.sub}</small>` : ''}</button>`).join('')}
     </div>
     <div class="period-custom" ${cur === 'custom' && !compact ? '' : 'hidden'}>
       <label>ตั้งแต่ <input type="date" class="pStart" value="${state.start}" min="${firstDate()}" max="${lastDate()}"></label>
       <label>ถึง <input type="date" class="pEnd" value="${state.end}" min="${firstDate()}" max="${lastDate()}"></label>
-    </div>
+    </div></div>
   </div>`;
 }
 function bindPeriod(root, onChange){
