@@ -72,6 +72,22 @@ button,input,select{font-family:inherit;font-size:inherit;color:inherit}
 .stage{min-width:0}
 .scaler{width:100%;overflow:hidden;border-radius:6px;box-shadow:0 2px 14px rgba(22,35,58,.12);background:#fff}
 .slide{width:1280px;height:720px;transform-origin:0 0;position:relative;background:var(--paper);font-family:var(--head);color:var(--ink)}
+.eq+.eq{margin-top:14px}
+.hp-tbl{overflow-x:auto;margin-bottom:10px}
+.hp-tbl table{width:100%;border-collapse:collapse;font-size:13.5px;font-variant-numeric:tabular-nums;min-width:560px}
+.hp-tbl th{text-align:right;font-weight:600;color:var(--muted);font-size:12.5px;padding:6px 10px;border-bottom:2px solid var(--navy)}
+.hp-tbl th:first-child,.hp-tbl td:first-child{text-align:left}
+.hp-tbl td{text-align:right;padding:7px 10px;border-bottom:1px solid #eef0f4}
+.hp-tbl .pp{display:inline-flex;align-items:center;gap:8px}
+.hp-tbl tbody tr[data-hold]{cursor:pointer}
+.hp-tbl tbody tr[data-hold]:hover{background:#f6f8fb}
+.hp-tbl tbody tr.on{background:#eef3fb}
+.hp-tbl tbody tr.on td:first-child{font-weight:600;color:var(--accent)}
+.hp-tbl tr.na td{color:var(--muted);text-align:left}
+.pbar{display:inline-block;width:90px;height:7px;border-radius:999px;background:#fde2e2;overflow:hidden}
+.pbar i{display:block;height:100%;background:#16a34a}
+.hp-say{font-size:13.5px;line-height:1.6;margin-top:4px}
+.tab:disabled{opacity:.35;cursor:not-allowed}
 .eq{background:#fff;border:1px solid var(--line);border-radius:10px;padding:16px 18px 12px;margin-top:14px}
 .eq-head{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:baseline;justify-content:space-between;margin-bottom:6px}
 .eq-head h3{font-family:var(--head);font-size:17px;margin:0;color:var(--navy)}
@@ -1012,6 +1028,8 @@ function renderResult(err){
       <div class="scaler" id="scaler"><div class="slide" id="slide"></div></div>
       <div class="hint" id="note"></div>
       <section class="eq" id="eq" aria-label="Equity curve"></section>
+      <section class="eq" id="cal" aria-label="ผลตอบแทนรายปี"></section>
+      <section class="eq" id="hold" aria-label="ผลตอบแทนตามระยะเวลาถือครอง"></section>
     </div>`;
   app.querySelector('#backBtn').onclick = () => { state.view = 'input'; render(); window.scrollTo(0, 0); };
   const pb = app.querySelector('#periodBox');
@@ -1029,6 +1047,8 @@ function update(){
   document.getElementById('note').innerHTML = noteHTML(r);
   stretchTable();
   drawEquity(r);
+  drawCalendar(r);
+  drawHolding(r);
   const sumEl = document.getElementById('sum');
   if (sumEl){ sumEl.className = 'sum ' + (Math.abs(r.sum-100) < 1e-6 ? 'good' : 'bad'); sumEl.lastElementChild.textContent = fmtNum(r.sum) + '%'; }
   const thrEl = document.getElementById('thr');
@@ -1161,6 +1181,93 @@ function stretchTable(){
 }
 
 
+
+/* ================= calendar-year returns ================= */
+function drawCalendar(r){
+  const box = document.getElementById('cal'); if (!box) return;
+  if (!r.port || !r.pf){ box.hidden = true; return; } box.hidden = false;
+  const s = r.pf, last = {}, first = {};
+  s.dates.forEach((d, i) => { const y = d.slice(0, 4); if (!(y in first)) first[y] = i; last[y] = i; });
+  const years = Object.keys(last).sort(); let prev = s.nav[0];
+  const rows = years.map((y, k) => { const e = s.nav[last[y]], st = k ? prev : s.nav[0]; prev = e;
+    const partial = (k === 0 && s.dates[first[y]].slice(5) > '01-07') || (k === years.length - 1 && s.dates[last[y]].slice(5) < '12-24');
+    return {y, r: e / st - 1, partial, from: s.dates[k ? last[years[k - 1]] : 0], to: s.dates[last[y]]}; });
+  const W = 1100, H = 260, padL = 56, padR = 18, padT = 26, padB = 30;
+  let lo = Math.min(0, ...rows.map(x => x.r)), hi = Math.max(0, ...rows.map(x => x.r));
+  const st = niceStep((hi - lo) || 0.01, 4); lo = Math.floor(lo / st) * st; hi = Math.ceil(hi / st) * st;
+  const y = v => padT + (H - padT - padB) * (hi - v) / (hi - lo);
+  const slot = (W - padL - padR) / rows.length, bw = Math.min(64, slot * 0.6);
+  const tk = []; for (let v = lo; v <= hi + 1e-12; v += st) tk.push(+v.toFixed(10));
+  const dp = st * 100 < 1 ? 1 : 0;
+  const grid = tk.map(v => `<line x1="${padL}" x2="${W-padR}" y1="${y(v)}" y2="${y(v)}" stroke="${Math.abs(v) < 1e-12 ? '#8b93a3' : '#e6e9ef'}"/><text x="${padL-8}" y="${y(v)+4}" text-anchor="end" font-size="11.5" fill="#6a7488">${(v > 0 ? '+' : '') + (v*100).toFixed(dp)}%</text>`).join('');
+  const bars = rows.map((x, i) => { const cx = padL + slot * (i + 0.5), y0 = y(0), y1 = y(x.r), pos = x.r >= 0;
+    const fill = pos ? '#16a34a' : '#e3191b';
+    return `<g><title>${x.y}: ${pct(x.r)} (${thDate(x.from)} – ${thDate(x.to)})</title>
+      <rect x="${cx - bw/2}" y="${Math.min(y0, y1)}" width="${bw}" height="${Math.max(1, Math.abs(y1 - y0))}" rx="3" fill="${fill}" opacity="${x.partial ? .45 : .9}"/>
+      <text x="${cx}" y="${pos ? y1 - 7 : y1 + 15}" text-anchor="middle" font-size="12.5" font-weight="600" fill="${pos ? '#15803d' : '#c81e1e'}">${pct(x.r)}</text>
+      <text x="${cx}" y="${H - 9}" text-anchor="middle" font-size="12" fill="#16233a">${x.y}${x.partial ? '*' : ''}</text></g>`; }).join('');
+  const part = rows.filter(x => x.partial);
+  box.innerHTML = `<div class="eq-head"><h3>ผลตอบแทนรายปี</h3><div class="eq-ctl"><span>${thDate(r.start)} – ${thDate(r.end)}</span></div></div>
+    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="ผลตอบแทนรายปี">${grid}${bars}</svg>
+    <div class="hint">${part.length ? '* ไม่เต็มปี: ' + part.map(x => x === rows[0] ? `${x.y} ตั้งแต่ ${thDate(s.dates[0])}` : `${x.y} ถึง ${thDate(x.to)}`).join(', ') + ' · ' : ''}ผลตอบแทนของพอร์ตตามปีปฏิทิน${r.div ? ' · ไม่รวมเงินปันผล DAA' : ''}</div>`;
+}
+
+/* ================= holding-period returns ================= */
+const HOLD = [['3M', 3], ['6M', 6], ['1Y', 12], ['3Y', 36], ['5Y', 60]];
+const HOLD_TH = {'3M':'3 เดือน', '6M':'6 เดือน', '1Y':'1 ปี', '3Y':'3 ปี', '5Y':'5 ปี'};
+function rollingN(s, months){
+  const out = []; let j = 0;
+  for (let i = 0; i < s.dates.length; i++){
+    const t0 = WP.edate(s.dates[i], -months); if (t0 < s.dates[0]) continue;
+    while (j + 1 < s.dates.length && s.dates[j + 1] <= t0) j++;
+    out.push({i, d: s.dates[i], r: s.nav[i] / s.nav[j] - 1});
+  }
+  return out;
+}
+function drawHolding(r){
+  const box = document.getElementById('hold'); if (!box) return;
+  if (!r.port || !r.pf){ box.hidden = true; return; } box.hidden = false;
+  const s = r.pf, sumOf = rows => { if (!rows.length) return null; let pos = 0, neg = 0, sm = 0, mn = Infinity, mx = -Infinity;
+    rows.forEach(x => { if (x.r > 0) pos++; else if (x.r < 0) neg++; sm += x.r; mn = Math.min(mn, x.r); mx = Math.max(mx, x.r); });
+    return {n: rows.length, pPos: pos / rows.length, avg: sm / rows.length, mn, mx}; };
+  const all = HOLD.map(([k, m]) => ({k, m, rows: rollingN(s, m)})).map(o => ({...o, st: sumOf(o.rows)}));
+  const avail = all.filter(o => o.st);
+  let sel = EQ.hold && avail.find(o => o.k === EQ.hold) ? EQ.hold : (avail.find(o => o.k === '1Y') || avail[0] || {}).k;
+  const cur = all.find(o => o.k === sel);
+  // summary table
+  const tbl = `<div class="hp-tbl"><table><thead><tr><th>ถือครอง</th><th>โอกาสได้กำไร</th><th>ผลตอบแทนเฉลี่ย</th><th>แย่ที่สุด</th><th>ดีที่สุด</th></tr></thead><tbody>
+    ${all.map(o => o.st ? `<tr class="${o.k === sel ? 'on' : ''}" data-hold="${o.k}"><td>${HOLD_TH[o.k]}</td>
+      <td><span class="pp"><span class="pbar"><i style="width:${(o.st.pPos*100).toFixed(1)}%"></i></span><b>${Math.round(o.st.pPos*100)}%</b></span></td>
+      <td class="${cls(o.st.avg)}">${pct(o.st.avg)}</td><td class="${cls(o.st.mn)}">${pct(o.st.mn)}</td><td class="${cls(o.st.mx)}">${pct(o.st.mx)}</td></tr>`
+      : `<tr class="na"><td>${HOLD_TH[o.k]}</td><td colspan="4">ข้อมูลไม่พอสำหรับช่วงเวลานี้</td></tr>`).join('')}
+  </tbody></table></div>`;
+  // chart for the selected period
+  let chart = '';
+  if (cur && cur.st){
+    const rows = cur.rows, W = 1100, H = 220, padL = 56, padR = 18, padT = 12, padB = 26, n = s.dates.length;
+    const x = i => padL + (W - padL - padR) * i / (n - 1);
+    let lo = Math.min(0, cur.st.mn), hi = Math.max(0, cur.st.mx); const st = niceStep((hi - lo) || 0.01, 4); lo = Math.floor(lo / st) * st; hi = Math.ceil(hi / st) * st;
+    const y = v => padT + (H - padT - padB) * (hi - v) / (hi - lo);
+    const tk = []; for (let v = lo; v <= hi + 1e-12; v += st) tk.push(+v.toFixed(10));
+    const dp = st * 100 < 1 ? 1 : 0;
+    const yrs = []; let ly = null; s.dates.forEach((d, i) => { const yy = d.slice(0, 4); if (yy !== ly){ if (ly && d.slice(5, 7) === '01') yrs.push({i, yy}); ly = yy; } });
+    const grid = tk.map(v => `<line x1="${padL}" x2="${W-padR}" y1="${y(v)}" y2="${y(v)}" stroke="${Math.abs(v) < 1e-12 ? '#8b93a3' : '#e6e9ef'}"/><text x="${padL-8}" y="${y(v)+4}" text-anchor="end" font-size="11.5" fill="#6a7488">${(v > 0 ? '+' : '') + (v*100).toFixed(dp)}%</text>`).join('')
+      + yrs.map(o => `<line x1="${x(o.i)}" x2="${x(o.i)}" y1="${padT}" y2="${H-padB}" stroke="#eef0f4"/><text x="${x(o.i)}" y="${H-8}" text-anchor="middle" font-size="11.5" fill="#6a7488">${o.yy}</text>`).join('');
+    const bw = Math.max(1, (W - padL - padR) / n + 0.3), y0 = y(0);
+    const bars = rows.map(p => `<rect x="${x(p.i).toFixed(1)}" y="${Math.min(y0, y(p.r)).toFixed(1)}" width="${bw.toFixed(2)}" height="${Math.abs(y(p.r) - y0).toFixed(1)}" fill="${p.r >= 0 ? '#16a34a' : '#e3191b'}" opacity=".75"/>`).join('');
+    chart = `<div class="eq-sub">ผลตอบแทนเมื่อถือครบ ${HOLD_TH[sel]} แยกตามวันที่ครบกำหนด</div>
+      <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="ผลตอบแทนเมื่อถือ ${HOLD_TH[sel]}">${grid}${bars}</svg>
+      <div class="hp-say">ถ้าเข้าลงทุนวันไหนก็ได้ในช่วงนี้ แล้วถือ <b>${HOLD_TH[sel]}</b> มีโอกาสได้กำไร <b class="pos">${Math.round(cur.st.pPos*100)}%</b>
+        · ผลตอบแทนเฉลี่ย <b class="${cls(cur.st.avg)}">${pct(cur.st.avg)}</b> · แย่ที่สุด <b class="${cls(cur.st.mn)}">${pct(cur.st.mn)}</b> · ดีที่สุด <b class="${cls(cur.st.mx)}">${pct(cur.st.mx)}</b>
+        <span class="muted">(${cur.st.n.toLocaleString()} ช่วงถือครอง)</span></div>`;
+  }
+  box.innerHTML = `<div class="eq-head"><h3>ผลตอบแทนตามระยะเวลาถือครอง</h3>
+      <div class="tabs" role="group" aria-label="ระยะเวลาถือครอง" style="padding:3px">${HOLD.map(([k]) => `<button class="tab" data-hold="${k}" aria-pressed="${k === sel}" ${all.find(o => o.k === k).st ? '' : 'disabled'}>${HOLD_TH[k]}</button>`).join('')}</div></div>
+    <div class="hint" style="margin:0 0 8px">ผลตอบแทนสะสมเมื่อถือครบตามระยะเวลา คิดทุกวันเริ่มต้นที่เป็นไปได้ในช่วง ${thDate(r.start)} – ${thDate(r.end)}${r.div ? ' · ไม่รวมเงินปันผล DAA' : ''} · กดแถวในตารางเพื่อดูกราฟ</div>
+    ${tbl}${chart}`;
+  box.querySelectorAll('[data-hold]').forEach(b => b.onclick = () => { EQ.hold = b.dataset.hold; drawHolding(r); });
+}
+
 /* ================= equity curve + drawdown ================= */
 const EQ = {models:false};
 function niceStep(range, n){ const raw = range / n, p = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / p; return (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * p; }
@@ -1269,7 +1376,7 @@ function drawEquity(r){
       <line id="eqX3" y1="${padT}" y2="${H3-padB}" stroke="#16233a" stroke-dasharray="3 3" visibility="hidden"/>
     </svg>`;
     cycleHTML = `
-      <div class="eq-head" style="margin-top:18px"><h3>ที่มาของค่า Median</h3>${tabsHTML}</div>
+      <div class="eq-head" style="margin-top:18px"><h3>Median Drawdown</h3>${tabsHTML}</div>
       <div class="hint" style="margin:0 0 6px">
         แต่ละแท่ง = 1 cycle คือวันที่ถ้าเข้าลงทุนแล้ว พอร์ตลงเกิน <b>${thrTxt}%</b> ภายใน 84 วันทำการ (≈ 4 เดือน)
         ${isDD ? 'ความสูงแท่ง = จุดต่ำสุดเทียบกับมูลค่าวันที่เข้า' : 'ความสูงแท่ง = จำนวนวันจนมูลค่ากลับมาเท่าวันที่เข้า (แท่งสีเทา = ยังไม่ฟื้น ไม่นับใน Median)'}<br>
@@ -1278,7 +1385,7 @@ function drawEquity(r){
         <span style="color:var(--muted)">· ชี้ที่แท่งเพื่อดูช่วงของ cycle นั้นบน Equity Curve</span></div>
       <div class="eq-wrap" id="cyWrap">${svg3}<div class="eq-tip" id="cyTip" hidden></div></div>`;
   } else {
-    cycleHTML = `<div class="eq-head" style="margin-top:18px"><h3>ที่มาของค่า Median</h3>${tabsHTML}</div><div class="hint">ไม่มีช่วงไหนที่พอร์ตลงเกินเกณฑ์ ${(r.thr*100).toFixed(2)}% ภายใน 84 วันทำการ จึงไม่มี cycle ให้คำนวณ Median</div>`;
+    cycleHTML = `<div class="eq-head" style="margin-top:18px"><h3>Median Drawdown</h3>${tabsHTML}</div><div class="hint">ไม่มีช่วงไหนที่พอร์ตลงเกินเกณฑ์ ${(r.thr*100).toFixed(2)}% ภายใน 84 วันทำการ จึงไม่มี cycle ให้คำนวณ Median</div>`;
   }
 
   box.innerHTML = `
