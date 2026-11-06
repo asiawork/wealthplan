@@ -897,7 +897,7 @@ function renderInput(err){
     app.querySelectorAll('[data-set]').forEach(b => b.setAttribute('aria-pressed', +b.dataset.set === amt));
     app.querySelector('#sumBody').innerHTML = `
       <div class="sum-plan">${plan.no ? `<span class="pno">แผน ${plan.no}</span>` : '<span class="pno">DIY</span>'}<b>${esc(meta.name)}</b>
-        ${meta.risk ? `<span class="sum-risk">${riskMeter(RISK_NUM(meta.risk)) + esc(meta.risk)}</span>` : ''}</div>
+        ${meta.risk ? `<span class="sum-risk">${esc(meta.risk)}</span>` : ''}</div>
       <div class="sum-main">${miniDonut(ms, w)}<div><div class="sum-amt">${amt > 0 ? fmtMoney(amt) : '—'}</div><div class="muted">ล้านบาท</div></div></div>
       <div class="sum-list">${ms.length ? ms.map(m => `<div class="${low.has(m) ? 'low' : ''}"><i style="background:${col[m]}"></i><b>${m}</b><span>${fmtNum(+w[m])}%</span><span>${amt > 0 ? fmtMoney(amt * w[m] / 100) + ' ลบ.' : ''}</span></div>`).join('') : '<div class="muted">ยังไม่ได้ใส่สัดส่วน</div>'}</div>`;
     const spb = app.querySelector('#sumPeriod'); spb.innerHTML = periodHTML(true);
