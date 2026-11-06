@@ -222,6 +222,31 @@ button,input,select{font-family:inherit;font-size:inherit;color:inherit}
 .period.compact{padding:10px;border-radius:10px}
 .period.compact .period-h b{font-size:14px}
 .period.compact .period-opts button{padding:4px 8px;font-size:12px}
+.printonly{display:none}
+.print-head{justify-content:space-between;align-items:baseline;gap:12px;border-bottom:3px solid var(--navy);padding-bottom:6px;margin-bottom:10px}
+.print-head b{font-family:var(--head);font-size:20px;color:var(--navy)}
+.print-head span{color:var(--muted);font-size:13px;margin-left:6px}
+.print-head #printMeta{font-size:12px;color:var(--muted)}
+.ptag{font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:2px 10px}
+@page{size:A4 landscape;margin:10mm}
+@media print{
+  html,body{background:#fff !important}
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .topbar,.controls,.noprint,.eq-tip,#exMsg{display:none !important}
+  .printonly{display:block}
+  .print-head.printonly{display:flex}
+  span.printonly{display:inline-block}
+  .wrap{max-width:none;padding:0 !important}
+  .scaler{box-shadow:none;border:1px solid #d6dbe4;border-radius:0}
+  .eq{border:0;padding:0;margin:0 !important;break-inside:avoid}
+  #eq{break-before:page}
+  .pb-median{break-before:page}
+  #cal{margin-top:18px !important}
+  #hold{break-before:page}
+  .hp-tbl tbody tr.on{background:none}
+  .hp-tbl tbody tr.on td:first-child{color:inherit;font-weight:400}
+  .eq-head{margin-top:0 !important}
+}
 .qr{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .qr-col{border-bottom:3px solid var(--navy);min-width:0}
 .qr-h{background:var(--navy);color:#fff;text-align:center;font-family:var(--head);font-weight:600;font-size:13px;padding:6px 4px}
@@ -1027,14 +1052,19 @@ function renderResult(err){
     <div class="controls">
       <div id="periodBox" class="periodwrap"></div>
       <div class="range" style="margin-left:auto">
+        <button class="btn" id="pdfBtn">บันทึกรายงาน (PDF)</button>
         <button class="btn" id="pngBtn">บันทึกรูป (PNG)</button>
         <button class="btn" id="pptBtn">ดาวน์โหลด PowerPoint</button>
         <span id="exMsg" class="hint" style="margin:0"></span>
       </div>
     </div>
+    <div class="print-head printonly">
+      <div><b>${esc(meta.name)}</b>${plan.no ? ` <span>แผน ${plan.no}${meta.risk ? ' · ' + esc(meta.risk) : ''}</span>` : ''}</div>
+      <div id="printMeta"></div>
+    </div>
     <div class="stage">
       <div class="scaler" id="scaler"><div class="slide" id="slide"></div></div>
-      <div class="hint" id="note"></div>
+      <div class="hint noprint" id="note"></div>
       <section class="eq" id="eq" aria-label="Equity curve"></section>
       <section class="eq" id="cal" aria-label="ผลตอบแทนรายปี"></section>
       <section class="eq" id="hold" aria-label="ผลตอบแทนตามระยะเวลาถือครอง"></section>
@@ -1043,6 +1073,7 @@ function renderResult(err){
   const pb = app.querySelector('#periodBox');
   const drawPeriod = () => { pb.innerHTML = periodHTML(false); bindPeriod(pb, () => { drawPeriod(); update(); }); };
   drawPeriod();
+  app.querySelector('#pdfBtn').onclick = exportPDF;
   app.querySelector('#pngBtn').onclick = exportPNG;
   app.querySelector('#pptBtn').onclick = exportPPTX;
   update();
@@ -1054,6 +1085,7 @@ function update(){
   document.getElementById('slide').innerHTML = slideHTML(plan, r);
   document.getElementById('note').innerHTML = noteHTML(r);
   stretchTable();
+  const pm = document.getElementById('printMeta'); if (pm) pm.textContent = `เงินลงทุน ${fmtMoney(parseFloat(state.amount) || 0)} ล้านบาท · ผลการดำเนินงานย้อนหลัง ${thDate(r.start || state.start)} – ${thDate(r.end || state.end)}`;
   drawEquity(r);
   drawCalendar(r);
   drawHolding(r);
@@ -1267,7 +1299,7 @@ function drawHolding(r){
       : `<tr class="na"><td>${HOLD_TH[o.k]}</td><td colspan="5">ข้อมูลไม่พอสำหรับช่วงเวลานี้</td></tr>`).join('')}
   </tbody></table></div>`;
   box.innerHTML = `<div class="eq-head" style="justify-content:flex-start;flex-direction:column;align-items:flex-start;gap:8px"><h3>ผลตอบแทนตามระยะเวลาถือครอง</h3>
-      <div class="hp-tabs" role="group" aria-label="ระยะเวลาถือครอง">${HOLD.map(([k]) => `<button data-hold="${k}" aria-pressed="${k === sel}" ${all.find(o => o.k === k).st ? '' : 'disabled'}>${k}</button>`).join('')}</div></div>
+      <div class="hp-tabs noprint" role="group" aria-label="ระยะเวลาถือครอง">${HOLD.map(([k]) => `<button data-hold="${k}" aria-pressed="${k === sel}" ${all.find(o => o.k === k).st ? '' : 'disabled'}>${k}</button>`).join('')}</div></div>
     ${chart}${tbl}
     <div class="hint" style="margin-top:6px">คิดจากมูลค่าพอร์ต ณ สิ้นเดือน ทุกเดือนที่เป็นไปได้ในช่วง ${thDate(r.start)} – ${thDate(r.end)}${r.div ? ' · ไม่รวมเงินปันผล DAA' : ''}</div>`;
   box.querySelectorAll('[data-hold]').forEach(b => b.onclick = () => { EQ.hold = b.dataset.hold; drawHolding(r); });
@@ -1310,7 +1342,7 @@ function drawEquity(r){
   const ticks = (a, b, s) => { const o = []; for (let v = a; v <= b + 1e-12; v += s) o.push(+v.toFixed(10)); return o; };
   const path = (v, yf) => { let s = '', pen = false; v.forEach((val,i) => { if (val == null){ pen = false; return; } s += (pen ? 'L' : 'M') + x(i).toFixed(1) + ',' + yf(val).toFixed(1); pen = true; }); return s; };
   const bfI = bfEnd ? pf.dates.findIndex(d => d >= bfEnd) : -1;
-  const bfRect = (H, label) => bfI > 0 ? `<rect x="${padL}" y="${padT}" width="${x(bfI)-padL}" height="${H-padT-padB}" fill="#f2f4f8"/>${label ? `<text x="${padL+8}" y="${padT+14}" font-size="11" fill="#8b93a3">ช่วงใช้ผลทดสอบย้อนหลัง</text>` : ''}` : '';
+  const bfRect = (H, label) => bfI > 0 ? `<g class="noprint"><rect x="${padL}" y="${padT}" width="${x(bfI)-padL}" height="${H-padT-padB}" fill="#f2f4f8"/>${label ? `<text x="${padL+8}" y="${padT+14}" font-size="11" fill="#8b93a3">ช่วงใช้ผลทดสอบย้อนหลัง</text>` : ''}</g>` : '';
   // max drawdown episode: peak -> back to that peak (recovery)
   const ri = r.mdd.recovered ? pf.dates.indexOf(r.mdd.rec) : n - 1;
   const recTxt = d => { const q = recLong(d); return q.v + ' ' + (q.u === 'months' ? 'เดือน' : 'ปี'); };
@@ -1342,7 +1374,7 @@ function drawEquity(r){
   /* ---- where the median comes from: one mark per counted cycle (entry date) ---- */
   const cyc = WP.cycles(pf, r.thr);
   const metric = EQ.metric === 'rec' ? 'rec' : 'dd';
-  const tabsHTML = `<div class="tabs" role="group" aria-label="เลือกค่าที่ดู" style="padding:3px">
+  const tabsHTML = `<div class="tabs noprint" role="group" aria-label="เลือกค่าที่ดู" style="padding:3px">
       <button class="tab" data-metric="dd" aria-pressed="${metric === 'dd'}">Drawdown</button>
       <button class="tab" data-metric="rec" aria-pressed="${metric === 'rec'}">Recovery Period</button></div>`;
   const thrTxt = (r.thr*100).toFixed(3).replace(/0+$/,'').replace(/\.$/,'');
@@ -1380,27 +1412,30 @@ function drawEquity(r){
       <text x="${W-padR-75}" y="${medY-8}" text-anchor="middle" font-size="12" font-weight="600" fill="#fff">Median ${medLbl}</text>
       <line id="eqX3" y1="${padT}" y2="${H3-padB}" stroke="#16233a" stroke-dasharray="3 3" visibility="hidden"/>
     </svg>`;
-    cycleHTML = `
-      <div class="eq-head" style="margin-top:18px"><h3>Median Drawdown</h3>${tabsHTML}</div>
-      <div class="hint" style="margin:0 0 6px">
+    cycleHTML = `<div class="pb-median">
+      <div class="eq-head" style="margin-top:18px"><h3>Median Drawdown</h3>${tabsHTML}<span class="printonly ptag">${isDD ? 'Drawdown' : 'Recovery Period'}</span></div>
+      <div class="hint printonly" style="margin:0 0 6px">${isDD
+        ? `แต่ละแท่ง = ผลขาดทุนสูงสุด หากเข้าลงทุนในวันนั้นแล้วพอร์ตปรับตัวลง · เส้นประ = ค่ามัธยฐาน <b>${medLbl}</b> · ลึกที่สุด ${extLbl}`
+        : `แต่ละแท่ง = ระยะเวลาจนมูลค่ากลับมาเท่าวันที่เข้าลงทุน · เส้นประ = ค่ามัธยฐาน <b>${medLbl}</b> · นานที่สุด ${extLbl}`}</div>
+      <div class="hint noprint" style="margin:0 0 6px">
         แต่ละแท่ง = 1 cycle คือวันที่ถ้าเข้าลงทุนแล้ว พอร์ตลงเกิน <b>${thrTxt}%</b> ภายใน 84 วันทำการ (≈ 4 เดือน)
         ${isDD ? 'ความสูงแท่ง = จุดต่ำสุดเทียบกับมูลค่าวันที่เข้า' : 'ความสูงแท่ง = จำนวนวันจนมูลค่ากลับมาเท่าวันที่เข้า (แท่งสีเทา = ยังไม่ฟื้น ไม่นับใน Median)'}<br>
         นับได้ <b>${cyc.length.toLocaleString()}</b> cycle${!isDD && pool.length !== cyc.length ? ` (ฟื้นแล้ว ${pool.length.toLocaleString()})` : ''}
         → <b>Median ${medLbl}</b> · ${isDD ? 'ลึกสุด' : 'นานสุด (Longest)'} ${extLbl}
         <span style="color:var(--muted)">· ชี้ที่แท่งเพื่อดูช่วงของ cycle นั้นบน Equity Curve</span></div>
-      <div class="eq-wrap" id="cyWrap">${svg3}<div class="eq-tip" id="cyTip" hidden></div></div>`;
+      <div class="eq-wrap" id="cyWrap">${svg3}<div class="eq-tip" id="cyTip" hidden></div></div></div>`;
   } else {
     cycleHTML = `<div class="eq-head" style="margin-top:18px"><h3>Median Drawdown</h3>${tabsHTML}</div><div class="hint">ไม่มีช่วงไหนที่พอร์ตลงเกินเกณฑ์ ${(r.thr*100).toFixed(2)}% ภายใน 84 วันทำการ จึงไม่มี cycle ให้คำนวณ Median</div>`;
   }
 
   box.innerHTML = `
     <div class="eq-head"><h3>Equity Curve</h3>
-      <div class="eq-ctl"><label><input type="checkbox" id="eqModels" ${EQ.models ? 'checked' : ''}> แสดงแต่ละโมเดล</label>
+      <div class="eq-ctl"><label class="noprint"><input type="checkbox" id="eqModels" ${EQ.models ? 'checked' : ''}> แสดงแต่ละโมเดล</label>
       <span>${thDate(r.start)} – ${thDate(r.end)}</span></div></div>
     <div class="eq-legend">
-      <span><i style="border-color:var(--navy)"></i>พอร์ต (ซื้อแล้วถือ ไม่ปรับสัดส่วน)</span>
+      <span><i style="border-color:var(--navy)"></i>พอร์ต<span class="noprint"> (ซื้อแล้วถือ ไม่ปรับสัดส่วน)</span></span>
       ${series.slice(1).map(s => `<span><i class="thin" style="border-color:${s.color}"></i>${s.name}</span>`).join('')}
-      ${bfI > 0 ? `<span><i class="box" style="background:#e9ecf2"></i>ช่วงใช้ผลทดสอบย้อนหลัง</span>` : ''}
+      ${bfI > 0 ? `<span class="noprint"><i class="box" style="background:#e9ecf2"></i>ช่วงใช้ผลทดสอบย้อนหลัง</span>` : ''}
     </div>
     <div class="eq-wrap" id="eqWrap">${svg1}
       <div class="eq-sub">Drawdown จากจุดสูงสุด · Max Drawdown & Recovery</div>
@@ -1537,6 +1572,12 @@ function exportName(ext){
 }
 function download(href, name){ const a = document.createElement('a'); a.href = href; a.download = name; document.body.appendChild(a); a.click(); a.remove(); }
 function exMsg(s){ const el = document.getElementById('exMsg'); if (el) el.textContent = s; }
+function exportPDF(){
+  const old = document.title; document.title = exportName('pdf').replace(/\.pdf$/, '');
+  const restore = () => { document.title = old; window.removeEventListener('afterprint', restore); };
+  window.addEventListener('afterprint', restore);
+  window.print();
+}
 async function exportPNG(){
   if (!window.htmlToImage){ exMsg('โหลดตัวช่วยบันทึกรูปไม่สำเร็จ (ต้องต่ออินเทอร์เน็ต)'); return; }
   exMsg('กำลังสร้างรูป…');
@@ -1661,6 +1702,8 @@ function fit(){
   sl.style.transform = `scale(${k})`; sc.style.height = (720*k) + 'px';
 }
 window.addEventListener('resize', fit);
+window.addEventListener('beforeprint', fit);
+window.addEventListener('afterprint', fit);
 if (window.ResizeObserver) new ResizeObserver(fit).observe(document.body);
 
 /* boot */
