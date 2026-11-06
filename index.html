@@ -959,12 +959,9 @@ function renderInput(err){
 /* ---------- period picker (shared by both pages) ---------- */
 const firstDate = () => DATA.csv.dates[0];
 const PERIODS = [
-  {id:'all',   label:'ตั้งแต่เริ่ม – ล่าสุด', range: () => [firstDate(), lastDate()]},
-  {id:'slide', label:'เม.ย. 2019 – เม.ย. 2026', sub:'ตามสไลด์', range: () => [SLIDE_PERIOD.start, SLIDE_PERIOD.end]},
-  {id:'5y',    label:'5 ปีล่าสุด', range: () => [WP.edate(lastDate(), -60), lastDate()]},
-  {id:'3y',    label:'3 ปีล่าสุด', range: () => [WP.edate(lastDate(), -36), lastDate()]},
-  {id:'1y',    label:'1 ปีล่าสุด', range: () => [WP.edate(lastDate(), -12), lastDate()]},
-  {id:'custom',label:'กำหนดเอง'},
+  {id:'all',   label:'ถึงข้อมูลล่าสุด', range: () => [firstDate(), lastDate()]},
+  {id:'slide', label:'ข้อมูลตามสไลด์', sub:'เม.ย. 2019 – เม.ย. 2026', range: () => [SLIDE_PERIOD.start, SLIDE_PERIOD.end]},
+  {id:'custom',label:'กำหนดเอง', resultOnly:true},
 ];
 function setPeriod(id){
   state.period = id; const p = PERIODS.find(x => x.id === id);
@@ -975,9 +972,9 @@ function periodHTML(compact){
   return `<div class="period${compact ? ' compact' : ''}">
     <div class="period-h"><span>ช่วงผลตอบแทน</span><b>${thDate(state.start)} – ${thDate(state.end)}</b><em>${yrs >= 1 ? yrs.toFixed(1) + ' ปี' : Math.round(yrs * 12) + ' เดือน'}</em></div>
     <div class="period-opts" role="radiogroup" aria-label="ช่วงผลตอบแทน">
-      ${PERIODS.map(p => `<button role="radio" aria-checked="${p.id === cur}" data-period="${p.id}">${p.label}${p.sub ? `<small>${p.sub}</small>` : ''}</button>`).join('')}
+      ${PERIODS.filter(p => !(compact && p.resultOnly)).map(p => `<button role="radio" aria-checked="${p.id === cur}" data-period="${p.id}">${p.label}${p.sub ? `<small>${p.sub}</small>` : ''}</button>`).join('')}
     </div>
-    <div class="period-custom" ${cur === 'custom' ? '' : 'hidden'}>
+    <div class="period-custom" ${cur === 'custom' && !compact ? '' : 'hidden'}>
       <label>ตั้งแต่ <input type="date" class="pStart" value="${state.start}" min="${firstDate()}" max="${lastDate()}"></label>
       <label>ถึง <input type="date" class="pEnd" value="${state.end}" min="${firstDate()}" max="${lastDate()}"></label>
     </div>
