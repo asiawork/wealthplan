@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap">
 <script src="https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="backfill.js"></script>
 <style>
 /* Layout: tool controls on top, a fixed 1280x720 "slide" scaled to fit, weights editor beside it. */
@@ -237,6 +238,7 @@ body.capturing #secEq,body.capturing #secMed{padding:16px 18px 18px;background:#
 body.capturing #secMed .eq-head{margin-top:0 !important}
 body.capturing .printonly{display:block}
 body.capturing span.printonly{display:inline-block}
+body.capturing .print-head.printonly{display:flex;padding:4px 2px 6px;background:#fff}
 
 .print-head{justify-content:space-between;align-items:baseline;gap:12px;border-bottom:3px solid var(--navy);padding-bottom:6px;margin-bottom:10px}
 .print-head b{font-family:var(--head);font-size:20px;color:var(--navy)}
@@ -1077,12 +1079,12 @@ function renderResult(err){
         <span id="exMsg" class="hint" style="margin:0"></span>
       </div>
     </div>
-    <div class="print-head printonly">
+    <div class="print-head printonly" id="printHead">
       <div><b>${esc(meta.name)}</b>${plan.no ? ` <span>แผน ${plan.no}${meta.risk ? ' · ' + esc(meta.risk) : ''}</span>` : ''}</div>
       <div id="printMeta"></div>
     </div>
     <div class="stage">
-      <div class="sechead noprint"><span>สไลด์สรุป</span><button class="secimg noprint" data-img="slide" title="บันทึกรูปส่วนนี้ (PNG)">⤓ รูป</button></div>
+      <div class="sechead noprint"><span>สไลด์สรุป</span><button class="secimg noprint" id="copySlide" title="คัดลอกรูปสไลด์ไปวางใน PowerPoint / LINE / อีเมล">⧉ คัดลอกรูปสไลด์</button></div>
       <div class="scaler" id="scaler"><div class="slide" id="slide"></div></div>
       <div class="hint noprint" id="note"></div>
       <section class="eq" id="eq" aria-label="Equity curve"></section>
@@ -1099,7 +1101,7 @@ function renderResult(err){
   document.addEventListener('click', dlClose);
   app.querySelector('#pdfBtn').onclick = () => { dlClose(); exportPDF(); };
   app.querySelector('#pptBtn').onclick = () => { dlClose(); exportPPTX(); };
-  app.addEventListener('click', e => { const b = e.target.closest('[data-img]'); if (b) exportSection(b.dataset.img); });
+  app.querySelector('#copySlide').onclick = copySlide;
   update();
   fit();
 }
@@ -1271,7 +1273,7 @@ function drawCalendar(r){
       <text x="${cx}" y="${pos ? y1 - 7 : y1 + 15}" text-anchor="middle" font-size="12.5" font-weight="600" fill="${pos ? '#15803d' : '#c81e1e'}">${pct(x.r)}</text>
       <text x="${cx}" y="${H - 9}" text-anchor="middle" font-size="12" fill="#16233a">${x.y}${x.partial ? '*' : ''}</text></g>`; }).join('');
   const part = rows.filter(x => x.partial);
-  box.innerHTML = `<div class="eq-head"><h3>ผลตอบแทนรายปี</h3><div class="eq-ctl"><button class="secimg noprint" data-img="cal" title="บันทึกรูปส่วนนี้ (PNG)">⤓ รูป</button><span>${thDate(r.start)} – ${thDate(r.end)}</span></div></div>
+  box.innerHTML = `<div class="eq-head"><h3>ผลตอบแทนรายปี</h3><div class="eq-ctl"><span>${thDate(r.start)} – ${thDate(r.end)}</span></div></div>
     <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="ผลตอบแทนรายปี">${grid}${bars}</svg>
     <div class="hint">${part.length ? '* ไม่เต็มปี: ' + part.map(x => x === rows[0] ? `${x.y} ตั้งแต่ ${thDate(s.dates[0])}` : `${x.y} ถึง ${thDate(x.to)}`).join(', ') + ' · ' : ''}ผลตอบแทนของพอร์ตตามปีปฏิทิน${r.div ? ' · ไม่รวมเงินปันผล DAA' : ''}</div>`;
 }
@@ -1323,7 +1325,7 @@ function drawHolding(r){
       <td class="${cls(o.st.avg)}">${pct(o.st.avg)}</td><td class="${cls(o.st.mn)}">${pct(o.st.mn)}</td><td class="${cls(o.st.mx)}">${pct(o.st.mx)}</td></tr>`
       : `<tr class="na"><td>${HOLD_TH[o.k]}</td><td colspan="5">ข้อมูลไม่พอสำหรับช่วงเวลานี้</td></tr>`).join('')}
   </tbody></table></div>`;
-  box.innerHTML = `<div class="eq-head" style="justify-content:flex-start;flex-direction:column;align-items:flex-start;gap:8px"><h3 style="display:flex;justify-content:space-between;width:100%;align-items:center">ผลตอบแทนตามระยะเวลาถือครอง<button class="secimg noprint" data-img="hold" title="บันทึกรูปส่วนนี้ (PNG)">⤓ รูป</button></h3>
+  box.innerHTML = `<div class="eq-head" style="justify-content:flex-start;flex-direction:column;align-items:flex-start;gap:8px"><h3 style="display:flex;justify-content:space-between;width:100%;align-items:center">ผลตอบแทนตามระยะเวลาถือครอง</h3>
       <div class="hp-tabs noprint" role="group" aria-label="ระยะเวลาถือครอง">${HOLD.map(([k]) => `<button data-hold="${k}" aria-pressed="${k === sel}" >${k}</button>`).join('')}</div></div>
     ${chart}${tbl}
     <div class="hint" style="margin-top:6px">คิดจากมูลค่าพอร์ต ณ สิ้นเดือน ทุกเดือนที่เป็นไปได้ในช่วง ${thDate(r.start)} – ${thDate(r.end)}${r.div ? ' · ไม่รวมเงินปันผล DAA' : ''}</div>`;
@@ -1438,7 +1440,7 @@ function drawEquity(r){
       <line id="eqX3" y1="${padT}" y2="${H3-padB}" stroke="#16233a" stroke-dasharray="3 3" visibility="hidden"/>
     </svg>`;
     cycleHTML = `<div class="pb-median" id="secMed">
-      <div class="eq-head" style="margin-top:18px"><h3>Median Drawdown</h3><span class="eq-ctl">${tabsHTML}<button class="secimg noprint" data-img="secMed" title="บันทึกรูปส่วนนี้ (PNG)">⤓ รูป</button></span><span class="printonly ptag">${isDD ? 'Drawdown' : 'Recovery Period'}</span></div>
+      <div class="eq-head" style="margin-top:18px"><h3>Median Drawdown</h3><span class="eq-ctl">${tabsHTML}</span><span class="printonly ptag">${isDD ? 'Drawdown' : 'Recovery Period'}</span></div>
       <div class="hint printonly" style="margin:0 0 6px">${isDD
         ? `แต่ละแท่ง = ผลขาดทุนสูงสุด หากเข้าลงทุนในวันนั้นแล้วพอร์ตปรับตัวลง · เส้นประ = ค่ามัธยฐาน <b>${medLbl}</b> · ลึกที่สุด ${extLbl}`
         : `แต่ละแท่ง = ระยะเวลาจนมูลค่ากลับมาเท่าวันที่เข้าลงทุน · เส้นประ = ค่ามัธยฐาน <b>${medLbl}</b> · นานที่สุด ${extLbl}`}</div>
@@ -1456,7 +1458,7 @@ function drawEquity(r){
   box.innerHTML = `
     <div id="secEq">
     <div class="eq-head"><h3>Equity Curve</h3>
-      <div class="eq-ctl"><button class="secimg noprint" data-img="secEq" title="บันทึกรูปส่วนนี้ (PNG)">⤓ รูป</button><label class="noprint"><input type="checkbox" id="eqModels" ${EQ.models ? 'checked' : ''}> แสดงแต่ละโมเดล</label>
+      <div class="eq-ctl"><label class="noprint"><input type="checkbox" id="eqModels" ${EQ.models ? 'checked' : ''}> แสดงแต่ละโมเดล</label>
       <span>${thDate(r.start)} – ${thDate(r.end)}</span></div></div>
     <div class="eq-legend">
       <span><i style="border-color:var(--navy)"></i>พอร์ต<span class="noprint"> (ซื้อแล้วถือ ไม่ปรับสัดส่วน)</span></span>
@@ -1599,11 +1601,27 @@ function exportName(ext){
 }
 function download(href, name){ const a = document.createElement('a'); a.href = href; a.download = name; document.body.appendChild(a); a.click(); a.remove(); }
 function exMsg(s){ const el = document.getElementById('exMsg'); if (el) el.textContent = s; }
-function exportPDF(){
-  const old = document.title; document.title = exportName('pdf').replace(/\.pdf$/, '');
-  const restore = () => { document.title = old; window.removeEventListener('afterprint', restore); };
-  window.addEventListener('afterprint', restore);
-  window.print();
+async function exportPDF(){
+  if (!window.htmlToImage || !window.jspdf){ exMsg('โหลดตัวช่วยสร้าง PDF ไม่สำเร็จ (ต้องต่ออินเทอร์เน็ต)'); return; }
+  exMsg('กำลังสร้าง PDF…');
+  try{
+    const pdf = new jspdf.jsPDF({orientation: 'landscape', unit: 'mm', format: 'a4'});
+    const PW = 297, PH = 210, M = 10, CW = PW - 2 * M;
+    // each page: a list of sections stacked top to bottom, scaled to fit the page
+    const pages = [['printHead', 'slide'], ['secEq'], ['secMed', 'cal'], ['hold']];
+    let first = true;
+    for (const ids of pages){
+      const caps = []; for (const id of ids){ const c = await capture(id); if (c) caps.push(c); }
+      if (!caps.length) continue;
+      if (!first) pdf.addPage(); first = false;
+      const gap = 5, natH = caps.reduce((a, c) => a + CW * c.h / c.w, 0) + gap * (caps.length - 1);
+      const k = Math.min(1, (PH - 2 * M) / natH);
+      let y = M;
+      caps.forEach(c => { const w = CW * k, h = CW * c.h / c.w * k; pdf.addImage(c.url, 'PNG', M + (CW - w) / 2, y, w, h, undefined, 'FAST'); y += h + gap; });
+    }
+    pdf.save(exportName('pdf'));
+    exMsg('');
+  }catch(e){ console.error(e); exMsg('สร้าง PDF ไม่สำเร็จ: ' + (e.message || e)); }
 }
 const SEC_TITLES = {slide: 'Summary', secEq: 'Equity Curve & Drawdown', secMed: 'Median Drawdown', cal: 'ผลตอบแทนรายปี', hold: 'ผลตอบแทนตามระยะเวลาถือครอง'};
 async function capture(id){
@@ -1617,6 +1635,18 @@ async function capture(id){
     const url = await htmlToImage.toPng(el, {pixelRatio: 2, backgroundColor: '#ffffff', ...opt});
     return {url, w, h};
   } finally { document.body.classList.remove('capturing'); }
+}
+async function copySlide(){
+  if (!window.htmlToImage){ exMsg('โหลดตัวช่วยสร้างรูปไม่สำเร็จ (ต้องต่ออินเทอร์เน็ต)'); return; }
+  const btn = document.getElementById('copySlide'), label = btn.textContent;
+  btn.textContent = 'กำลังสร้างรูป…';
+  try{
+    const c = await capture('slide');
+    const blob = await (await fetch(c.url)).blob();
+    try{ await navigator.clipboard.write([new ClipboardItem({'image/png': blob})]); btn.textContent = '✓ คัดลอกแล้ว'; }
+    catch(e){ download(c.url, exportName('png')); btn.textContent = 'คัดลอกไม่ได้ — ดาวน์โหลดรูปแทน'; }
+  }catch(e){ btn.textContent = 'สร้างรูปไม่สำเร็จ'; }
+  setTimeout(() => { btn.textContent = label; }, 2200);
 }
 async function exportSection(id){
   if (!window.htmlToImage){ exMsg('โหลดตัวช่วยบันทึกรูปไม่สำเร็จ (ต้องต่ออินเทอร์เน็ต)'); return; }
