@@ -223,6 +223,21 @@ button,input,select{font-family:inherit;font-size:inherit;color:inherit}
 .period.compact .period-h b{font-size:14px}
 .period.compact .period-opts button{padding:4px 8px;font-size:12px}
 .printonly{display:none}
+.dlmenu{position:relative}
+.dlpanel{position:absolute;right:0;top:calc(100% + 6px);background:#fff;border-radius:10px;box-shadow:0 10px 28px rgba(22,35,58,.2);padding:6px;z-index:20;min-width:230px;display:flex;flex-direction:column}
+.dlpanel button{display:flex;flex-direction:column;align-items:flex-start;gap:1px;border:0;background:none;text-align:left;padding:8px 10px;border-radius:7px;cursor:pointer;color:var(--ink)}
+.dlpanel button:hover{background:#f3f5f9}
+.dlpanel b{font-weight:600;color:var(--navy)}
+.dlpanel small{font-size:12px;color:var(--muted)}
+.secimg{border:1px solid var(--line);background:#fff;border-radius:7px;padding:3px 9px;font-size:12px;color:var(--navy);cursor:pointer;white-space:nowrap}
+.secimg:hover{border-color:var(--navy)}
+.sechead{display:flex;justify-content:space-between;align-items:center;margin:0 0 6px;font-size:13px;color:var(--muted)}
+body.capturing .noprint,body.capturing .eq-tip{display:none !important}
+body.capturing #secEq,body.capturing #secMed{padding:16px 18px 18px;background:#fff}
+body.capturing #secMed .eq-head{margin-top:0 !important}
+body.capturing .printonly{display:block}
+body.capturing span.printonly{display:inline-block}
+
 .print-head{justify-content:space-between;align-items:baseline;gap:12px;border-bottom:3px solid var(--navy);padding-bottom:6px;margin-bottom:10px}
 .print-head b{font-family:var(--head);font-size:20px;color:var(--navy)}
 .print-head span{color:var(--muted);font-size:13px;margin-left:6px}
@@ -1052,9 +1067,13 @@ function renderResult(err){
     <div class="controls">
       <div id="periodBox" class="periodwrap"></div>
       <div class="range" style="margin-left:auto">
-        <button class="btn" id="pdfBtn">บันทึกรายงาน (PDF)</button>
-        <button class="btn" id="pngBtn">บันทึกรูป (PNG)</button>
-        <button class="btn" id="pptBtn">ดาวน์โหลด PowerPoint</button>
+        <div class="dlmenu">
+          <button class="btn" id="dlBtn" aria-expanded="false" aria-haspopup="true">⤓ ดาวน์โหลดรายงาน ▾</button>
+          <div class="dlpanel" id="dlPanel" hidden>
+            <button id="pdfBtn"><b>PDF</b><small>รายงานครบทุกส่วน 4 หน้า</small></button>
+            <button id="pptBtn"><b>PowerPoint</b><small>สไลด์สรุป + กราฟแต่ละส่วน</small></button>
+          </div>
+        </div>
         <span id="exMsg" class="hint" style="margin:0"></span>
       </div>
     </div>
@@ -1063,6 +1082,7 @@ function renderResult(err){
       <div id="printMeta"></div>
     </div>
     <div class="stage">
+      <div class="sechead noprint"><span>สไลด์สรุป</span><button class="secimg noprint" data-img="slide" title="บันทึกรูปส่วนนี้ (PNG)">⤓ รูป</button></div>
       <div class="scaler" id="scaler"><div class="slide" id="slide"></div></div>
       <div class="hint noprint" id="note"></div>
       <section class="eq" id="eq" aria-label="Equity curve"></section>
@@ -1073,9 +1093,13 @@ function renderResult(err){
   const pb = app.querySelector('#periodBox');
   const drawPeriod = () => { pb.innerHTML = periodHTML(false); bindPeriod(pb, () => { drawPeriod(); update(); }); };
   drawPeriod();
-  app.querySelector('#pdfBtn').onclick = exportPDF;
-  app.querySelector('#pngBtn').onclick = exportPNG;
-  app.querySelector('#pptBtn').onclick = exportPPTX;
+  const dlb = app.querySelector('#dlBtn'), dlp = app.querySelector('#dlPanel');
+  const dlClose = () => { dlp.hidden = true; dlb.setAttribute('aria-expanded', 'false'); };
+  dlb.onclick = e => { e.stopPropagation(); dlp.hidden = !dlp.hidden; dlb.setAttribute('aria-expanded', String(!dlp.hidden)); };
+  document.addEventListener('click', dlClose);
+  app.querySelector('#pdfBtn').onclick = () => { dlClose(); exportPDF(); };
+  app.querySelector('#pptBtn').onclick = () => { dlClose(); exportPPTX(); };
+  app.addEventListener('click', e => { const b = e.target.closest('[data-img]'); if (b) exportSection(b.dataset.img); });
   update();
   fit();
 }
@@ -1247,14 +1271,14 @@ function drawCalendar(r){
       <text x="${cx}" y="${pos ? y1 - 7 : y1 + 15}" text-anchor="middle" font-size="12.5" font-weight="600" fill="${pos ? '#15803d' : '#c81e1e'}">${pct(x.r)}</text>
       <text x="${cx}" y="${H - 9}" text-anchor="middle" font-size="12" fill="#16233a">${x.y}${x.partial ? '*' : ''}</text></g>`; }).join('');
   const part = rows.filter(x => x.partial);
-  box.innerHTML = `<div class="eq-head"><h3>ผลตอบแทนรายปี</h3><div class="eq-ctl"><span>${thDate(r.start)} – ${thDate(r.end)}</span></div></div>
+  box.innerHTML = `<div class="eq-head"><h3>ผลตอบแทนรายปี</h3><div class="eq-ctl"><button class="secimg noprint" data-img="cal" title="บันทึกรูปส่วนนี้ (PNG)">⤓ รูป</button><span>${thDate(r.start)} – ${thDate(r.end)}</span></div></div>
     <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="ผลตอบแทนรายปี">${grid}${bars}</svg>
     <div class="hint">${part.length ? '* ไม่เต็มปี: ' + part.map(x => x === rows[0] ? `${x.y} ตั้งแต่ ${thDate(s.dates[0])}` : `${x.y} ถึง ${thDate(x.to)}`).join(', ') + ' · ' : ''}ผลตอบแทนของพอร์ตตามปีปฏิทิน${r.div ? ' · ไม่รวมเงินปันผล DAA' : ''}</div>`;
 }
 
 /* ================= holding-period returns (month-end observations) ================= */
-const HOLD = [['3M', 3], ['6M', 6], ['1Y', 12], ['3Y', 36], ['5Y', 60]];
-const HOLD_TH = {'3M':'3 เดือน', '6M':'6 เดือน', '1Y':'1 ปี', '3Y':'3 ปี', '5Y':'5 ปี'};
+const HOLD_ALL = [['3M', 3], ['6M', 6], ...Array.from({length: 15}, (_, i) => [(i + 1) + 'Y', (i + 1) * 12])];
+const HOLD_TH = Object.fromEntries(HOLD_ALL.map(([k, m]) => [k, m < 12 ? m + ' เดือน' : m / 12 + ' ปี']));
 function holdingMonthly(s, months){
   const me = []; for (let i = 0; i < s.dates.length; i++){ const nx = s.dates[i + 1]; if (!nx || nx.slice(0, 7) !== s.dates[i].slice(0, 7)) me.push(i); }
   const out = []; for (let k = months; k < me.length; k++) out.push({d: s.dates[me[k]], r: s.nav[me[k]] / s.nav[me[k - months]] - 1});
@@ -1267,7 +1291,8 @@ function drawHolding(r){
   const sumOf = rows => { if (!rows.length) return null; let pos = 0, neg = 0, sm = 0, mn = Infinity, mx = -Infinity;
     rows.forEach(x => { if (x.r > 0) pos++; else if (x.r < 0) neg++; sm += x.r; mn = Math.min(mn, x.r); mx = Math.max(mx, x.r); });
     const d = pos + neg || 1; return {n: rows.length, pPos: pos / d, pNeg: neg / d, avg: sm / rows.length, mn, mx}; };
-  const all = HOLD.map(([k, m]) => { const rows = holdingMonthly(s, m); return {k, m, rows, st: sumOf(rows)}; });
+  const all = HOLD_ALL.map(([k, m]) => { const rows = holdingMonthly(s, m); return {k, m, rows, st: sumOf(rows)}; }).filter(o => o.st);
+  const HOLD = all.map(o => [o.k, o.m]);
   const avail = all.filter(o => o.st);
   const sel = EQ.hold && avail.find(o => o.k === EQ.hold) ? EQ.hold : (avail.find(o => o.k === '1Y') || avail[0] || {}).k;
   const cur = all.find(o => o.k === sel);
@@ -1298,8 +1323,8 @@ function drawHolding(r){
       <td class="${cls(o.st.avg)}">${pct(o.st.avg)}</td><td class="${cls(o.st.mn)}">${pct(o.st.mn)}</td><td class="${cls(o.st.mx)}">${pct(o.st.mx)}</td></tr>`
       : `<tr class="na"><td>${HOLD_TH[o.k]}</td><td colspan="5">ข้อมูลไม่พอสำหรับช่วงเวลานี้</td></tr>`).join('')}
   </tbody></table></div>`;
-  box.innerHTML = `<div class="eq-head" style="justify-content:flex-start;flex-direction:column;align-items:flex-start;gap:8px"><h3>ผลตอบแทนตามระยะเวลาถือครอง</h3>
-      <div class="hp-tabs noprint" role="group" aria-label="ระยะเวลาถือครอง">${HOLD.map(([k]) => `<button data-hold="${k}" aria-pressed="${k === sel}" ${all.find(o => o.k === k).st ? '' : 'disabled'}>${k}</button>`).join('')}</div></div>
+  box.innerHTML = `<div class="eq-head" style="justify-content:flex-start;flex-direction:column;align-items:flex-start;gap:8px"><h3 style="display:flex;justify-content:space-between;width:100%;align-items:center">ผลตอบแทนตามระยะเวลาถือครอง<button class="secimg noprint" data-img="hold" title="บันทึกรูปส่วนนี้ (PNG)">⤓ รูป</button></h3>
+      <div class="hp-tabs noprint" role="group" aria-label="ระยะเวลาถือครอง">${HOLD.map(([k]) => `<button data-hold="${k}" aria-pressed="${k === sel}" >${k}</button>`).join('')}</div></div>
     ${chart}${tbl}
     <div class="hint" style="margin-top:6px">คิดจากมูลค่าพอร์ต ณ สิ้นเดือน ทุกเดือนที่เป็นไปได้ในช่วง ${thDate(r.start)} – ${thDate(r.end)}${r.div ? ' · ไม่รวมเงินปันผล DAA' : ''}</div>`;
   box.querySelectorAll('[data-hold]').forEach(b => b.onclick = () => { EQ.hold = b.dataset.hold; drawHolding(r); });
@@ -1412,8 +1437,8 @@ function drawEquity(r){
       <text x="${W-padR-75}" y="${medY-8}" text-anchor="middle" font-size="12" font-weight="600" fill="#fff">Median ${medLbl}</text>
       <line id="eqX3" y1="${padT}" y2="${H3-padB}" stroke="#16233a" stroke-dasharray="3 3" visibility="hidden"/>
     </svg>`;
-    cycleHTML = `<div class="pb-median">
-      <div class="eq-head" style="margin-top:18px"><h3>Median Drawdown</h3>${tabsHTML}<span class="printonly ptag">${isDD ? 'Drawdown' : 'Recovery Period'}</span></div>
+    cycleHTML = `<div class="pb-median" id="secMed">
+      <div class="eq-head" style="margin-top:18px"><h3>Median Drawdown</h3><span class="eq-ctl">${tabsHTML}<button class="secimg noprint" data-img="secMed" title="บันทึกรูปส่วนนี้ (PNG)">⤓ รูป</button></span><span class="printonly ptag">${isDD ? 'Drawdown' : 'Recovery Period'}</span></div>
       <div class="hint printonly" style="margin:0 0 6px">${isDD
         ? `แต่ละแท่ง = ผลขาดทุนสูงสุด หากเข้าลงทุนในวันนั้นแล้วพอร์ตปรับตัวลง · เส้นประ = ค่ามัธยฐาน <b>${medLbl}</b> · ลึกที่สุด ${extLbl}`
         : `แต่ละแท่ง = ระยะเวลาจนมูลค่ากลับมาเท่าวันที่เข้าลงทุน · เส้นประ = ค่ามัธยฐาน <b>${medLbl}</b> · นานที่สุด ${extLbl}`}</div>
@@ -1429,8 +1454,9 @@ function drawEquity(r){
   }
 
   box.innerHTML = `
+    <div id="secEq">
     <div class="eq-head"><h3>Equity Curve</h3>
-      <div class="eq-ctl"><label class="noprint"><input type="checkbox" id="eqModels" ${EQ.models ? 'checked' : ''}> แสดงแต่ละโมเดล</label>
+      <div class="eq-ctl"><button class="secimg noprint" data-img="secEq" title="บันทึกรูปส่วนนี้ (PNG)">⤓ รูป</button><label class="noprint"><input type="checkbox" id="eqModels" ${EQ.models ? 'checked' : ''}> แสดงแต่ละโมเดล</label>
       <span>${thDate(r.start)} – ${thDate(r.end)}</span></div></div>
     <div class="eq-legend">
       <span><i style="border-color:var(--navy)"></i>พอร์ต<span class="noprint"> (ซื้อแล้วถือ ไม่ปรับสัดส่วน)</span></span>
@@ -1442,6 +1468,7 @@ function drawEquity(r){
       <div class="hint" style="margin:0 0 4px">แถบแดง = ช่วง Max Drawdown: จุดสูงสุด ${thDate(r.mdd.peak)} → ต่ำสุด ${thDate(r.mdd.trough)} (<b>${pct(r.mdd.dd)}</b>) → ${r.mdd.recovered ? `กลับถึงจุดสูงสุดเดิม ${thDate(r.mdd.rec)} · <b>Recovery ${recTxt(r.mdd.days)}</b>` : '<b>ยังไม่กลับถึงจุดสูงสุดเดิม</b>'}</div>
       ${svg2}
       <div class="eq-tip" id="eqTip" hidden></div></div>
+    </div>
     ${cycleHTML}`;
   box.querySelector('#eqModels').onchange = e => { EQ.models = e.target.checked; drawEquity(r); };
   // hover
@@ -1578,6 +1605,25 @@ function exportPDF(){
   window.addEventListener('afterprint', restore);
   window.print();
 }
+const SEC_TITLES = {slide: 'Summary', secEq: 'Equity Curve & Drawdown', secMed: 'Median Drawdown', cal: 'ผลตอบแทนรายปี', hold: 'ผลตอบแทนตามระยะเวลาถือครอง'};
+async function capture(id){
+  const el = document.getElementById(id);
+  if (!el || el.hidden) return null;
+  document.body.classList.add('capturing');
+  try{
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const opt = id === 'slide' ? {width: 1280, height: 720, style: {transform: 'none'}} : {};
+    const w = id === 'slide' ? 1280 : el.offsetWidth, h = id === 'slide' ? 720 : el.offsetHeight;
+    const url = await htmlToImage.toPng(el, {pixelRatio: 2, backgroundColor: '#ffffff', ...opt});
+    return {url, w, h};
+  } finally { document.body.classList.remove('capturing'); }
+}
+async function exportSection(id){
+  if (!window.htmlToImage){ exMsg('โหลดตัวช่วยบันทึกรูปไม่สำเร็จ (ต้องต่ออินเทอร์เน็ต)'); return; }
+  exMsg('กำลังสร้างรูป…');
+  try{ const c = await capture(id); if (c) download(c.url, exportName('png').replace(/\.png$/, '_' + id + '.png')); exMsg(''); }
+  catch(e){ exMsg('บันทึกรูปไม่สำเร็จ: ' + (e.message || e)); }
+}
 async function exportPNG(){
   if (!window.htmlToImage){ exMsg('โหลดตัวช่วยบันทึกรูปไม่สำเร็จ (ต้องต่ออินเทอร์เน็ต)'); return; }
   exMsg('กำลังสร้างรูป…');
@@ -1689,6 +1735,16 @@ async function exportPPTX(){
     const ft = slideEl.querySelector('.foot'), fb = box(ft), lines = ft.innerText.split('\n');
     s.addText(lines.map((l, i) => ({text: l, options: {breakLine: i < lines.length - 1}})),
       {x: fb.x - 0.2, y: fb.y, w: fb.w + 0.2, h: fb.h, margin: 0, fontFace: BF, fontSize: 8, color: '333333', align: 'right', valign: 'middle'});
+    // further slides: each chart section as a picture
+    if (window.htmlToImage){
+      for (const id of ['secEq', 'secMed', 'cal', 'hold']){
+        const c = await capture(id); if (!c) continue;
+        const sl = pptx.addSlide(); sl.background = {color: 'FFFFFF'};
+        const maxW = 12.73, maxH = 6.9, k = Math.min(maxW / (c.w / 96), maxH / (c.h / 96));
+        const w = c.w / 96 * k, h = c.h / 96 * k;
+        sl.addImage({data: c.url, x: (13.333 - w) / 2, y: (7.5 - h) / 2, w, h});
+      }
+    }
     await pptx.writeFile({fileName: exportName('pptx')});
     exMsg('');
   }catch(e){ console.error(e); exMsg('สร้าง PowerPoint ไม่สำเร็จ: ' + (e.message || e)); }
